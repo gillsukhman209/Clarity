@@ -20,7 +20,6 @@ final class TaskStore {
 
     init(context: ModelContext) {
         self.context = context
-        seedIfEmpty()
         refresh()
     }
 
@@ -96,33 +95,37 @@ final class TaskStore {
         }
     }
 
-    // MARK: - Seed
+    // MARK: - Bulk replace (used by AI plan generator)
 
-    private func seedIfEmpty() {
+    /// Wipe all current tasks and seed with the given plan.
+    func replaceAll(with newTasks: [PlanTask]) {
         let descriptor = FetchDescriptor<TaskRecord>()
-        let count = (try? context.fetchCount(descriptor)) ?? 0
-        guard count == 0 else { return }
-
-        for section in MockData.daySections {
-            for plan in section.tasks {
-                let subRecords = plan.subtasks.enumerated().map { index, sub in
-                    SubtaskRecord(id: sub.id, title: sub.title, isCompleted: sub.isCompleted, sortIndex: index)
-                }
-                let record = TaskRecord(
-                    id: plan.id,
-                    title: plan.title,
-                    category: plan.category,
-                    priority: plan.priority,
-                    section: section.kind,
-                    startTime: plan.startTime,
-                    durationMinutes: plan.durationMinutes,
-                    notes: plan.notes,
-                    isCompleted: plan.isCompleted,
-                    subtasks: subRecords
-                )
-                context.insert(record)
-            }
+        let existing = (try? context.fetch(descriptor)) ?? []
+        for record in existing {
+            context.delete(record)
+        }
+        for plan in newTasks {
+            context.insert(record(from: plan))
         }
         save()
+        refresh()
+    }
+
+    private func record(from plan: PlanTask) -> TaskRecord {
+        let subRecords = plan.subtasks.enumerated().map { index, sub in
+            SubtaskRecord(id: sub.id, title: sub.title, isCompleted: sub.isCompleted, sortIndex: index)
+        }
+        return TaskRecord(
+            id: plan.id,
+            title: plan.title,
+            category: plan.category,
+            priority: plan.priority,
+            section: plan.section,
+            startTime: plan.startTime,
+            durationMinutes: plan.durationMinutes,
+            notes: plan.notes,
+            isCompleted: plan.isCompleted,
+            subtasks: subRecords
+        )
     }
 }

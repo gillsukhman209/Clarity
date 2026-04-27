@@ -26,14 +26,18 @@ struct DashboardView: View {
                 .padding(.top, AppSpacing.lg)
                 .padding(.bottom, AppSpacing.lg)
 
-            ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: AppSpacing.xl) {
-                    ForEach(store.daySections) { section in
-                        sectionView(section)
+            if store.daySections.isEmpty {
+                emptyState
+            } else {
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: AppSpacing.xl) {
+                        ForEach(store.daySections) { section in
+                            sectionView(section)
+                        }
                     }
+                    .padding(.horizontal, AppSpacing.xl)
+                    .padding(.bottom, AppSpacing.xl)
                 }
-                .padding(.horizontal, AppSpacing.xl)
-                .padding(.bottom, AppSpacing.xl)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -144,6 +148,25 @@ struct DashboardView: View {
             }
             .appShadow(AppShadow.card)
         }
+    }
+
+    // MARK: - Empty state
+    private var emptyState: some View {
+        VStack(spacing: AppSpacing.md) {
+            Spacer()
+            Image(systemName: "sparkles")
+                .font(.system(size: 40, weight: .semibold))
+                .foregroundStyle(AppColors.accent.opacity(0.5))
+            Text("Nothing planned yet")
+                .font(AppTypography.title)
+                .foregroundStyle(AppColors.textPrimary)
+            Text("Tap the mic on the right to do a brain dump.\nI'll turn it into a structured day.")
+                .font(AppTypography.body)
+                .foregroundStyle(AppColors.textSecondary)
+                .multilineTextAlignment(.center)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Section

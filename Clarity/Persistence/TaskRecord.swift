@@ -55,13 +55,14 @@ final class TaskRecord {
 
     func toDomain() -> PlanTask {
         let subs = subtasks
-            .sorted { $0.title < $1.title }   // stable order for the UI; refined later
+            .sorted { $0.sortIndex < $1.sortIndex }
             .map { Subtask(id: $0.id, title: $0.title, isCompleted: $0.isCompleted) }
         return PlanTask(
             id: id,
             title: title,
             category: category,
             priority: priority,
+            section: section,
             startTime: startTime,
             durationMinutes: durationMinutes,
             notes: notes,

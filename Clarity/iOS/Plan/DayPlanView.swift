@@ -25,15 +25,19 @@ struct DayPlanView: View {
             VStack(spacing: 0) {
                 topBar
                 Divider().background(AppColors.divider)
-                ScrollView {
-                    VStack(spacing: AppSpacing.xs) {
-                        ForEach(Array(store.tasks.enumerated()), id: \.element.id) { index, task in
-                            row(for: task, previous: index > 0 ? store.tasks[index - 1] : nil)
+                if store.tasks.isEmpty {
+                    emptyState
+                } else {
+                    ScrollView {
+                        VStack(spacing: AppSpacing.xs) {
+                            ForEach(Array(store.tasks.enumerated()), id: \.element.id) { index, task in
+                                row(for: task, previous: index > 0 ? store.tasks[index - 1] : nil)
+                            }
                         }
+                        .padding(.horizontal, AppSpacing.md)
+                        .padding(.top, AppSpacing.md)
+                        .padding(.bottom, 120)
                     }
-                    .padding(.horizontal, AppSpacing.md)
-                    .padding(.top, AppSpacing.md)
-                    .padding(.bottom, 120)
                 }
             }
             .background(AppColors.background)
@@ -123,6 +127,26 @@ struct DayPlanView: View {
         let f = DateFormatter()
         f.dateFormat = "h a"
         return f.string(from: date)
+    }
+
+    // MARK: - Empty state
+    private var emptyState: some View {
+        VStack(spacing: AppSpacing.md) {
+            Spacer()
+            Image(systemName: "sparkles")
+                .font(.system(size: 36, weight: .semibold))
+                .foregroundStyle(AppColors.accent.opacity(0.5))
+            Text("Your day is a blank slate")
+                .font(AppTypography.title)
+                .foregroundStyle(AppColors.textPrimary)
+            Text("Tap the mic and tell me what's on your mind.\nI'll plan it for you.")
+                .font(AppTypography.body)
+                .foregroundStyle(AppColors.textSecondary)
+                .multilineTextAlignment(.center)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, AppSpacing.xl)
     }
 
     // MARK: - Floating mic

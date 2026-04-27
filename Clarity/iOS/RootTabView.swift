@@ -29,7 +29,7 @@ struct RootTabView: View {
                     Label("Insights", systemImage: "chart.line.uptrend.xyaxis")
                 }
 
-            ComingSoonView(title: "Settings")
+            SettingsView()
                 .tabItem {
                     Label("Settings", systemImage: "gearshape")
                 }

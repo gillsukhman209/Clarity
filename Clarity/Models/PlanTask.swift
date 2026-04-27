@@ -12,6 +12,7 @@ struct PlanTask: Identifiable, Hashable {
     var title: String
     var category: TaskCategory
     var priority: TaskPriority
+    var section: DaySectionKind
     var startTime: Date
     var durationMinutes: Int
     var notes: String?
@@ -23,6 +24,7 @@ struct PlanTask: Identifiable, Hashable {
         title: String,
         category: TaskCategory,
         priority: TaskPriority = .medium,
+        section: DaySectionKind,
         startTime: Date,
         durationMinutes: Int,
         notes: String? = nil,
@@ -33,6 +35,7 @@ struct PlanTask: Identifiable, Hashable {
         self.title = title
         self.category = category
         self.priority = priority
+        self.section = section
         self.startTime = startTime
         self.durationMinutes = durationMinutes
         self.notes = notes

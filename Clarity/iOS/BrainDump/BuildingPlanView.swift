@@ -2,39 +2,26 @@
 //  BuildingPlanView.swift
 //  Clarity
 //
-//  Phase 2 — "Building your plan" progress checklist.
-//  Phase 5 — auto-advances through the checklist with a pulsing orb,
-//            then enables "Show My Day".
+//  Phase 2/8 — runs the transcript through PlanGenerator and animates the
+//  five-step checklist while the OpenAI call resolves in parallel.
 //
 
 import SwiftUI
 
 struct BuildingPlanView: View {
+    var transcript: String = ""
     var onCancel: () -> Void = {}
     var onDone: () -> Void = {}
 
-    private struct Step: Identifiable {
-        let id = UUID()
-        let title: String
-    }
+    #if os(iOS)
+    @Environment(TaskStore.self) private var store
+    #endif
 
-    private enum Status {
-        case done, inProgress, pending
-    }
+    @State private var generator = PlanGenerator()
+    @State private var didStart = false
 
-    private let steps: [Step] = [
-        Step(title: "Extracting tasks"),
-        Step(title: "Estimating time"),
-        Step(title: "Prioritizing"),
-        Step(title: "Optimizing schedule"),
-        Step(title: "Finalizing your plan")
-    ]
-
-    /// Steps with index < `progressIndex` are done.
-    /// Step at `progressIndex` is in progress (or none if `progressIndex >= steps.count`).
-    @State private var progressIndex: Int = 0
-
-    private var allDone: Bool { progressIndex >= steps.count }
+    private var allDone: Bool { generator.isComplete && generator.error == nil }
+    private var hasError: Bool { generator.error != nil }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -43,35 +30,39 @@ struct BuildingPlanView: View {
             header
                 .padding(.horizontal, AppSpacing.lg)
             Spacer(minLength: AppSpacing.lg)
-            GlowingOrb(size: 140, isPulsing: !allDone)
+            GlowingOrb(size: 140, isPulsing: !generator.isComplete)
                 .frame(height: 280)
             Spacer(minLength: AppSpacing.lg)
             checklist
                 .padding(.horizontal, AppSpacing.xl)
+            if let err = generator.error {
+                errorCard(err)
+                    .padding(.horizontal, AppSpacing.lg)
+                    .padding(.top, AppSpacing.md)
+            }
             Spacer(minLength: AppSpacing.lg)
-            doneButton
+            primaryButton
                 .padding(.horizontal, AppSpacing.lg)
                 .padding(.bottom, AppSpacing.lg)
         }
         .background(AppColors.background)
-        .task { await runProgress() }
-    }
-
-    private func runProgress() async {
-        // Reset and step through.
-        progressIndex = 0
-        for i in 0..<steps.count {
-            try? await Task.sleep(for: .milliseconds(900))
-            withAnimation(.easeInOut(duration: 0.3)) {
-                progressIndex = i + 1
-            }
+        .task {
+            guard !didStart else { return }
+            didStart = true
+            await runGeneration()
         }
     }
 
-    private func status(for index: Int) -> Status {
-        if index < progressIndex { return .done }
-        if index == progressIndex { return .inProgress }
-        return .pending
+    private func runGeneration() async {
+        #if os(iOS)
+        let existing = store.tasks
+        await generator.generate(from: transcript, existing: existing)
+        if generator.error == nil, !generator.tasks.isEmpty {
+            store.replaceAll(with: generator.tasks)
+        }
+        #else
+        await generator.generate(from: transcript)
+        #endif
     }
 
     // MARK: - Top bar
@@ -88,36 +79,63 @@ struct BuildingPlanView: View {
         .padding(.top, AppSpacing.sm)
     }
 
+    // MARK: - Header
     private var header: some View {
         VStack(spacing: AppSpacing.xs) {
-            Text(allDone ? "Your day is ready" : "Building your plan")
+            Text(headerTitle)
                 .font(AppTypography.displayMedium)
                 .foregroundStyle(AppColors.textPrimary)
+                .multilineTextAlignment(.center)
                 .contentTransition(.opacity)
-            Text(allDone ? "Tap below to see your day." : "Clarity is organizing your day…")
+            Text(headerSubtitle)
                 .font(AppTypography.bodyLarge)
                 .foregroundStyle(AppColors.textSecondary)
+                .multilineTextAlignment(.center)
                 .contentTransition(.opacity)
         }
         .animation(.easeInOut(duration: 0.25), value: allDone)
+        .animation(.easeInOut(duration: 0.25), value: hasError)
+    }
+
+    private var headerTitle: String {
+        if hasError { return "Hmm, something went wrong" }
+        if allDone  { return "Your day is ready" }
+        return "Building your plan"
+    }
+
+    private var headerSubtitle: String {
+        if hasError { return "Tap retry to try again." }
+        if allDone  { return "Tap below to see your day." }
+        return "Clarity is organizing your day…"
     }
 
     // MARK: - Checklist
     private var checklist: some View {
         VStack(alignment: .leading, spacing: AppSpacing.sm) {
-            ForEach(Array(steps.enumerated()), id: \.element.id) { index, step in
+            ForEach(PlanGenerator.Stage.allCases, id: \.rawValue) { step in
                 HStack(spacing: 12) {
-                    statusIcon(for: status(for: index))
+                    statusIcon(for: status(for: step))
                         .frame(width: 22, height: 22)
                     Text(step.title)
                         .font(AppTypography.bodyMedium)
-                        .foregroundStyle(textColor(for: status(for: index)))
+                        .foregroundStyle(textColor(for: status(for: step)))
                     Spacer()
                 }
-                .animation(.easeInOut(duration: 0.25), value: progressIndex)
+                .animation(.easeInOut(duration: 0.25), value: generator.stage)
+                .animation(.easeInOut(duration: 0.25), value: generator.isComplete)
             }
         }
         .frame(maxWidth: 360)
+    }
+
+    private enum Status { case done, inProgress, pending }
+
+    private func status(for step: PlanGenerator.Stage) -> Status {
+        if hasError { return step.rawValue <= generator.stage.rawValue ? .pending : .pending }
+        if generator.isComplete { return .done }
+        if step.rawValue <  generator.stage.rawValue { return .done }
+        if step.rawValue == generator.stage.rawValue { return .inProgress }
+        return .pending
     }
 
     @ViewBuilder
@@ -141,27 +159,61 @@ struct BuildingPlanView: View {
 
     private func textColor(for status: Status) -> Color {
         switch status {
-        case .done:       return AppColors.textPrimary
-        case .inProgress: return AppColors.textPrimary
-        case .pending:    return AppColors.textTertiary
+        case .done, .inProgress: return AppColors.textPrimary
+        case .pending:           return AppColors.textTertiary
         }
     }
 
-    private var doneButton: some View {
-        Button(action: onDone) {
-            Text("Show My Day")
-                .font(AppTypography.bodySemibold)
+    // MARK: - Error
+    private func errorCard(_ message: String) -> some View {
+        AppCard(padding: AppSpacing.md, background: AppColors.Priority.highFill.opacity(0.5)) {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(AppColors.Priority.highInk)
+                Text(message)
+                    .font(AppTypography.body)
+                    .foregroundStyle(AppColors.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    // MARK: - Primary button
+    @ViewBuilder
+    private var primaryButton: some View {
+        if hasError {
+            Button {
+                Task { await runGeneration() }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 14, weight: .semibold))
+                    Text("Try again")
+                        .font(AppTypography.bodySemibold)
+                }
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
-                .background(
-                    Capsule(style: .continuous)
-                        .fill(allDone ? AppColors.accent : AppColors.accent.opacity(0.4))
-                )
+                .background(Capsule(style: .continuous).fill(AppColors.accent))
+            }
+            .buttonStyle(PressableStyle(pressedScale: 0.98))
+        } else {
+            Button(action: onDone) {
+                Text("Show My Day")
+                    .font(AppTypography.bodySemibold)
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(
+                        Capsule(style: .continuous)
+                            .fill(allDone ? AppColors.accent : AppColors.accent.opacity(0.4))
+                    )
+            }
+            .buttonStyle(PressableStyle(pressedScale: 0.98))
+            .disabled(!allDone)
+            .animation(.easeInOut(duration: 0.2), value: allDone)
         }
-        .buttonStyle(PressableStyle(pressedScale: 0.98))
-        .disabled(!allDone)
-        .animation(.easeInOut(duration: 0.2), value: allDone)
     }
 }
 
@@ -169,7 +221,6 @@ struct BuildingPlanView: View {
 
 private struct SpinnerRing: View {
     @State private var rotate: Bool = false
-
     var body: some View {
         ZStack {
             Circle()

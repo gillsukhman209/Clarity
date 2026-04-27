@@ -71,9 +71,8 @@ struct TranscribingView: View {
             errorMessage = error.localizedDescription
         }
         #else
-        // macOS path will arrive in a later phase; show a placeholder for now.
-        transcript = MockData.sampleTranscript
-        phase = .ready
+        phase = .failed
+        errorMessage = "Voice capture isn't available on macOS yet."
         #endif
     }
 

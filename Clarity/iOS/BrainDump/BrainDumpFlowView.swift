@@ -48,6 +48,7 @@ struct BrainDumpFlowView: View {
                 .id("transcribing")
             case .building:
                 BuildingPlanView(
+                    transcript: transcript,
                     onCancel: { dismiss() },
                     onDone: { dismiss() }
                 )
