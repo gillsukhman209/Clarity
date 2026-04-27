@@ -63,6 +63,31 @@ final class TaskStore {
         notifications?.sync(with: tasks)
     }
 
+    // MARK: - Date-filtered views
+
+    /// Tasks scheduled on the same calendar day as `date`, in start-time order.
+    func tasks(on date: Date) -> [PlanTask] {
+        let cal = Calendar.current
+        return tasks
+            .filter { cal.isDate($0.startTime, inSameDayAs: date) }
+            .sorted { $0.startTime < $1.startTime }
+    }
+
+    /// `daySections` filtered to the given date.
+    func daySections(on date: Date) -> [DaySection] {
+        let order: [DaySectionKind] = [
+            .focusTime, .create, .getThingsDone, .energize, .windDown
+        ]
+        var grouped: [DaySectionKind: [PlanTask]] = [:]
+        for task in tasks(on: date) {
+            grouped[task.section, default: []].append(task)
+        }
+        return order.compactMap { kind in
+            guard let bucket = grouped[kind], !bucket.isEmpty else { return nil }
+            return DaySection(kind: kind, tasks: bucket)
+        }
+    }
+
     // MARK: - Mutations
 
     func toggleComplete(_ taskID: UUID) {

@@ -14,11 +14,33 @@ struct DayPlanView: View {
     @Environment(TaskStore.self) private var store
     @State private var presentedTask: SelectedTask?
     @State private var showQuickAdd: Bool = false
+    @State private var currentDate: Date = Calendar.current.startOfDay(for: Date())
+
+    private var visibleTasks: [PlanTask] {
+        store.tasks(on: currentDate)
+    }
 
     private var dateLabel: String {
         let f = DateFormatter()
         f.dateFormat = "MMMM d, yyyy"
-        return f.string(from: Date())
+        return f.string(from: currentDate)
+    }
+
+    private var navigatorLabel: String {
+        let cal = Calendar.current
+        if cal.isDateInToday(currentDate)     { return "Today" }
+        if cal.isDateInYesterday(currentDate) { return "Yesterday" }
+        if cal.isDateInTomorrow(currentDate)  { return "Tomorrow" }
+        let f = DateFormatter()
+        f.dateFormat = "EEE, MMM d"
+        return f.string(from: currentDate)
+    }
+
+    private func stepDate(_ delta: Int) {
+        let cal = Calendar.current
+        if let next = cal.date(byAdding: .day, value: delta, to: currentDate) {
+            currentDate = cal.startOfDay(for: next)
+        }
     }
 
     var body: some View {
@@ -26,7 +48,7 @@ struct DayPlanView: View {
             VStack(spacing: 0) {
                 topBar
                 Divider().background(AppColors.divider)
-                if store.tasks.isEmpty {
+                if visibleTasks.isEmpty {
                     emptyState
                 } else {
                     taskList
@@ -60,24 +82,22 @@ struct DayPlanView: View {
     // MARK: - Top bar
     private var topBar: some View {
         HStack(alignment: .center, spacing: AppSpacing.sm) {
-            Button {} label: {
-                Image(systemName: "line.3.horizontal")
-                    .font(.system(size: 20, weight: .semibold))
+            Button {
+                stepDate(-1)
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(AppColors.textPrimary)
+                    .frame(width: 36, height: 36)
             }
             .buttonStyle(.plain)
 
             Spacer()
 
             VStack(spacing: 2) {
-                HStack(spacing: 6) {
-                    Text("Today")
-                        .font(AppTypography.titleSmall)
-                        .foregroundStyle(AppColors.textPrimary)
-                    Image(systemName: "chevron.up.chevron.down")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(AppColors.textTertiary)
-                }
+                Text(navigatorLabel)
+                    .font(AppTypography.titleSmall)
+                    .foregroundStyle(AppColors.textPrimary)
                 Text(dateLabel)
                     .font(AppTypography.caption)
                     .foregroundStyle(AppColors.textTertiary)
@@ -85,10 +105,13 @@ struct DayPlanView: View {
 
             Spacer()
 
-            Button {} label: {
-                Image(systemName: "calendar")
-                    .font(.system(size: 19, weight: .semibold))
+            Button {
+                stepDate(1)
+            } label: {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(AppColors.textPrimary)
+                    .frame(width: 36, height: 36)
             }
             .buttonStyle(.plain)
         }
@@ -100,7 +123,7 @@ struct DayPlanView: View {
     private var taskList: some View {
         ScrollView {
             LazyVStack(spacing: AppSpacing.xs) {
-                ForEach(Array(store.tasks.enumerated()), id: \.element.id) { index, task in
+                ForEach(Array(visibleTasks.enumerated()), id: \.element.id) { index, task in
                     SwipeableRow(
                         onTap: { presentedTask = SelectedTask(id: task.id) },
                         leadingAction: SwipeAction(
@@ -117,7 +140,7 @@ struct DayPlanView: View {
                             action: { store.delete(task.id) }
                         )
                     ) {
-                        row(for: task, previous: index > 0 ? store.tasks[index - 1] : nil)
+                        row(for: task, previous: index > 0 ? visibleTasks[index - 1] : nil)
                             .background(AppColors.background)
                     }
                     .contextMenu {

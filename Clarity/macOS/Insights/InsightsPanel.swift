@@ -10,24 +10,46 @@
 import SwiftUI
 
 struct InsightsPanel: View {
+    var currentDate: Date = Date()
     var onOpenBrainDump: () -> Void = {}
+    var onClose: () -> Void = {}
 
     @Environment(TaskStore.self) private var store
+
+    private var visibleTasks: [PlanTask] {
+        store.tasks(on: currentDate)
+    }
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: AppSpacing.lg) {
-                    Text("Insights")
-                        .font(AppTypography.title)
-                        .foregroundStyle(AppColors.textPrimary)
+                    HStack {
+                        Text("Insights")
+                            .font(AppTypography.title)
+                            .foregroundStyle(AppColors.textPrimary)
+                        Spacer()
+                        HoverScaleButton(action: onClose, hoverScale: 1.08) {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(AppColors.textSecondary)
+                                .frame(width: 24, height: 24)
+                                .background(
+                                    Circle().fill(AppColors.surface)
+                                )
+                                .overlay(
+                                    Circle().stroke(AppColors.border, lineWidth: 1)
+                                )
+                        }
+                        .accessibilityLabel("Hide Insights")
+                    }
 
                     Text("Day at a glance")
                         .font(AppTypography.captionSemibold)
                         .tracking(0.6)
                         .foregroundStyle(AppColors.textTertiary)
 
-                    let stats = computeStats(store.tasks)
+                    let stats = computeStats(visibleTasks)
 
                     LazyVGrid(
                         columns: [

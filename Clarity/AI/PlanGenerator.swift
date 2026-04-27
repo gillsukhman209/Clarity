@@ -87,23 +87,60 @@ final class PlanGenerator {
     }
 
     private func buildUserMessage(transcript: String, existing: [PlanTask]) -> String {
-        guard !existing.isEmpty else { return transcript }
+        let dateHeader = "Today's date: \(Self.todayDateString())"
+
+        guard !existing.isEmpty else {
+            return """
+            \(dateHeader)
+
+            \(transcript)
+            """
+        }
 
         let lines = existing.map { task -> String in
-            let subs = task.subtasks.isEmpty ? "" : " — subtasks: \(task.subtasks.map(\.title).joined(separator: "; "))"
-            return "- \(task.startTimeLabel) \(task.title) (\(task.durationMinutes)m, category=\(task.category.rawValue), priority=\(task.priority.rawValue), section=\(task.section.rawValue))\(subs)"
+            let subs = task.subtasks.isEmpty
+                ? ""
+                : " — subtasks: \(task.subtasks.map(\.title).joined(separator: "; "))"
+            let day = Self.dayLabel(for: task.startTime)
+            return "- [\(day)] \(task.startTimeLabel) \(task.title) (\(task.durationMinutes)m, category=\(task.category.rawValue), priority=\(task.priority.rawValue), section=\(task.section.rawValue))\(subs)"
         }
         let summary = lines.joined(separator: "\n")
 
         return """
-        My current day plan:
+        \(dateHeader)
+
+        My current plan (across days):
         \(summary)
 
         New thoughts from me:
         \(transcript)
 
-        Update my plan to incorporate the new thoughts. Keep tasks that aren't affected. Adjust times if needed to fit the new tasks. Output the FULL updated day, not just deltas.
+        Update my plan to incorporate the new thoughts. Keep tasks that aren't affected. Set dayOffset on each task — match each existing task's [day label] above, and use the user's day references for new tasks. Output the FULL updated plan, not just deltas.
         """
+    }
+
+    private static func todayDateString() -> String {
+        let f = DateFormatter()
+        f.dateFormat = "EEEE, MMMM d, yyyy"
+        return f.string(from: Date())
+    }
+
+    private static func dayLabel(for date: Date) -> String {
+        let cal = Calendar.current
+        if cal.isDateInToday(date)     { return "Today" }
+        if cal.isDateInTomorrow(date)  { return "Tomorrow" }
+        if cal.isDateInYesterday(date) { return "Yesterday" }
+        let today = cal.startOfDay(for: Date())
+        let target = cal.startOfDay(for: date)
+        let days = cal.dateComponents([.day], from: today, to: target).day ?? 0
+        if days > 0 {
+            let f = DateFormatter()
+            f.dateFormat = "EEE MMM d"
+            return "\(f.string(from: date)) (+\(days)d)"
+        }
+        let f = DateFormatter()
+        f.dateFormat = "EEE MMM d"
+        return f.string(from: date)
     }
 
     // MARK: - OpenAI call
@@ -176,9 +213,18 @@ final class PlanGenerator {
     - For tasks without explicit times, place them in a sensible order based on what they said.
     - Don't pack tasks back-to-back; a few minutes gap is fine. Don't add filler tasks to fill gaps.
 
+    DAY ASSIGNMENT (dayOffset):
+    - dayOffset is an INTEGER number of days from today. 0 = today (default), 1 = tomorrow, 2 = day after, 7 = a week from today, etc.
+    - The user message starts with "Today's date: ...". Use that as your anchor for "today".
+    - If the user says "tomorrow", "next Friday", "in 3 days", "Monday", "on the 15th", etc., compute the dayOffset and set it on THAT specific task.
+    - Different tasks in the same brain dump CAN have different dayOffsets — set each one based on what the user said about it.
+    - If the user does not mention a day for a task, dayOffset must be 0 (today).
+    - If the user merges new thoughts into an existing plan, only change dayOffset on tasks they explicitly want to move.
+
     PER-TASK FIELDS:
     - title: short, action-oriented, faithful to what the user said
     - category, priority, section: see allowed values
+    - dayOffset: integer, see above
     - startHour, startMinute, durationMinutes: realistic numbers (estimate duration if not given)
     - notes: 1–2 sentences on how to approach it
     - subtasks: 1–4 short actionable steps ONLY for tasks that benefit from breakdown (deep focus / creative work). Empty array for everything else.
@@ -272,13 +318,14 @@ private struct JSONSchema: Encodable {
                 "category":        JSONSchema(type: .string, enum: categoryEnum),
                 "priority":        JSONSchema(type: .string, enum: priorityEnum),
                 "section":         JSONSchema(type: .string, enum: sectionEnum),
+                "dayOffset":       JSONSchema(type: .integer, minimum: 0, maximum: 90),
                 "startHour":       JSONSchema(type: .integer, minimum: 0, maximum: 23),
                 "startMinute":     JSONSchema(type: .integer, minimum: 0, maximum: 59),
                 "durationMinutes": JSONSchema(type: .integer, minimum: 5, maximum: 480),
                 "notes":           JSONSchema(type: .string),
                 "subtasks":        JSONSchema(type: .array, items: SchemaBox(JSONSchema(type: .string)))
             ],
-            required: ["title", "category", "priority", "section", "startHour", "startMinute", "durationMinutes", "notes", "subtasks"],
+            required: ["title", "category", "priority", "section", "dayOffset", "startHour", "startMinute", "durationMinutes", "notes", "subtasks"],
             additionalProperties: false
         )
 
@@ -307,6 +354,7 @@ private struct DayPlanJSON: Decodable {
         let category: String
         let priority: String
         let section: String
+        let dayOffset: Int
         let startHour: Int
         let startMinute: Int
         let durationMinutes: Int
@@ -322,12 +370,17 @@ private struct DayPlanJSON: Decodable {
             let category = TaskCategory(rawValue: t.category) ?? .work
             let priority = TaskPriority(rawValue: t.priority) ?? .medium
             let section  = DaySectionKind(rawValue: t.section) ?? .getThingsDone
+            let day = cal.date(
+                byAdding: .day,
+                value: max(0, min(90, t.dayOffset)),
+                to: today
+            ) ?? today
             let startTime = cal.date(
                 bySettingHour: max(0, min(23, t.startHour)),
                 minute: max(0, min(59, t.startMinute)),
                 second: 0,
-                of: today
-            ) ?? today
+                of: day
+            ) ?? day
             return PlanTask(
                 title: t.title,
                 category: category,

@@ -25,6 +25,26 @@ struct MacTaskDetailPanel: View {
         }
         .frame(maxHeight: .infinity, alignment: .top)
         .background(AppColors.surface)
+        .overlay(alignment: .topTrailing) {
+            closeButton
+                .padding(AppSpacing.sm)
+        }
+    }
+
+    private var closeButton: some View {
+        HoverScaleButton(action: onComplete, hoverScale: 1.08) {
+            Image(systemName: "xmark")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(AppColors.textSecondary)
+                .frame(width: 24, height: 24)
+                .background(
+                    Circle().fill(AppColors.background)
+                )
+                .overlay(
+                    Circle().stroke(AppColors.border, lineWidth: 1)
+                )
+        }
+        .accessibilityLabel("Close task details")
     }
 
     private var missing: some View {

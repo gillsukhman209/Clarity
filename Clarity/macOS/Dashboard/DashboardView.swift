@@ -11,10 +11,16 @@ import SwiftUI
 
 struct DashboardView: View {
     @Binding var selectedTaskID: UUID?
+    @Binding var currentDate: Date
+    @Binding var showInsights: Bool
     var onOpenBrainDump: () -> Void = {}
 
     @Environment(TaskStore.self) private var store
     @State private var showQuickAdd: Bool = false
+
+    private var visibleSections: [DaySection] {
+        store.daySections(on: currentDate)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -27,7 +33,7 @@ struct DashboardView: View {
                 .padding(.top, AppSpacing.lg)
                 .padding(.bottom, AppSpacing.lg)
 
-            if store.daySections.isEmpty {
+            if visibleSections.isEmpty {
                 emptyState
             } else {
                 taskList
@@ -50,6 +56,9 @@ struct DashboardView: View {
     }
 
     private var greeting: String {
+        if !Calendar.current.isDateInToday(currentDate) {
+            return relativeDayLabel
+        }
         let hour = Calendar.current.component(.hour, from: Date())
         switch hour {
         case 0..<12:  return "Good morning."
@@ -61,7 +70,16 @@ struct DashboardView: View {
     private var dateLine: String {
         let f = DateFormatter()
         f.dateFormat = "EEEE, MMMM d"
-        return f.string(from: Date())
+        return f.string(from: currentDate)
+    }
+
+    private var relativeDayLabel: String {
+        let cal = Calendar.current
+        if cal.isDateInYesterday(currentDate) { return "Yesterday." }
+        if cal.isDateInTomorrow(currentDate)  { return "Tomorrow." }
+        let f = DateFormatter()
+        f.dateFormat = "EEEE."
+        return f.string(from: currentDate)
     }
 
     // MARK: - Toolbar
@@ -72,17 +90,18 @@ struct DashboardView: View {
             Spacer()
             searchField
             addTaskButton
+            insightsToggle
         }
     }
 
     private var todayNavigator: some View {
         HStack(spacing: 6) {
-            chevronButton(symbol: "chevron.left")
-            Text("Today")
+            chevronButton(symbol: "chevron.left", action: { stepDate(-1) })
+            Text(navigatorLabel)
                 .font(AppTypography.bodySemibold)
                 .foregroundStyle(AppColors.textPrimary)
-                .frame(minWidth: 60)
-            chevronButton(symbol: "chevron.right")
+                .frame(minWidth: 80)
+            chevronButton(symbol: "chevron.right", action: { stepDate(1) })
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 4)
@@ -94,8 +113,42 @@ struct DashboardView: View {
         )
     }
 
-    private func chevronButton(symbol: String) -> some View {
-        HoverScaleButton(action: {}) {
+    private var navigatorLabel: String {
+        let cal = Calendar.current
+        if cal.isDateInToday(currentDate)     { return "Today" }
+        if cal.isDateInYesterday(currentDate) { return "Yesterday" }
+        if cal.isDateInTomorrow(currentDate)  { return "Tomorrow" }
+        let f = DateFormatter()
+        f.dateFormat = "MMM d"
+        return f.string(from: currentDate)
+    }
+
+    private func stepDate(_ delta: Int) {
+        let cal = Calendar.current
+        if let next = cal.date(byAdding: .day, value: delta, to: currentDate) {
+            currentDate = cal.startOfDay(for: next)
+        }
+    }
+
+    private var insightsToggle: some View {
+        HoverScaleButton(action: { showInsights.toggle() }, hoverScale: 1.06) {
+            Image(systemName: showInsights ? "sidebar.right" : "sidebar.right")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(showInsights ? AppColors.accent : AppColors.textSecondary)
+                .frame(width: 32, height: 32)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(showInsights ? AppColors.accentSoft.opacity(0.45) : AppColors.surface)
+                )
+                .overlay(
+                    Capsule(style: .continuous).stroke(AppColors.border, lineWidth: 1)
+                )
+        }
+        .accessibilityLabel(showInsights ? "Hide Insights" : "Show Insights")
+    }
+
+    private func chevronButton(symbol: String, action: @escaping () -> Void) -> some View {
+        HoverScaleButton(action: action) {
             Image(systemName: symbol)
                 .font(.system(size: 11, weight: .bold))
                 .foregroundStyle(AppColors.textSecondary)
@@ -185,7 +238,7 @@ struct DashboardView: View {
     private var taskList: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: AppSpacing.xl) {
-                ForEach(store.daySections) { section in
+                ForEach(visibleSections) { section in
                     VStack(alignment: .leading, spacing: AppSpacing.sm) {
                         DaySectionHeader(section: section)
 
