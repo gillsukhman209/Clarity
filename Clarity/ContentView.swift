@@ -10,6 +10,7 @@ struct ContentView: View {
     @Environment(\.modelContext) private var context
     @State private var store: TaskStore?
     @State private var transcription = TranscriptionService()
+    @State private var cloudStatus = CloudSyncStatus()
     @State private var showReadyBanner: Bool = false
 
     var body: some View {
@@ -18,6 +19,7 @@ struct ContentView: View {
                 rootView
                     .environment(store)
                     .environment(transcription)
+                    .environment(cloudStatus)
                     .overlay(alignment: .top) {
                         VoiceReadyBanner(visible: showReadyBanner)
                             .padding(.top, 8)
@@ -31,9 +33,9 @@ struct ContentView: View {
             if store == nil {
                 store = TaskStore(context: context)
             }
-            #if os(iOS)
-            await transcription.prepareIfNeeded()
-            #endif
+            async let prep: Void = transcription.prepareIfNeeded()
+            async let cloud: Void = cloudStatus.refresh()
+            _ = await (prep, cloud)
         }
         .onChange(of: transcription.pendingReadyAnnouncement) { _, pending in
             guard pending else { return }

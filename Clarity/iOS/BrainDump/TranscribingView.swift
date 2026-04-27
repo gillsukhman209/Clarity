@@ -17,9 +17,7 @@ struct TranscribingView: View {
     @State private var phase: Phase = .transcribing
     @State private var errorMessage: String?
 
-    #if os(iOS)
     @Environment(TranscriptionService.self) private var transcription
-    #endif
 
     private enum Phase: Equatable {
         case transcribing
@@ -48,7 +46,6 @@ struct TranscribingView: View {
     // MARK: - Lifecycle
 
     private func runTranscription() async {
-        #if os(iOS)
         guard let url = recordingURL else {
             phase = .failed
             errorMessage = "No recording was captured."
@@ -70,10 +67,6 @@ struct TranscribingView: View {
             phase = .failed
             errorMessage = error.localizedDescription
         }
-        #else
-        phase = .failed
-        errorMessage = "Voice capture isn't available on macOS yet."
-        #endif
     }
 
     // MARK: - Top bar

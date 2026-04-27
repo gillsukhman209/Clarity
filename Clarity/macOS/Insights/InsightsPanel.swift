@@ -2,8 +2,8 @@
 //  InsightsPanel.swift
 //  Clarity
 //
-//  Phase 4 — far-right column with day-at-a-glance tiles, productivity score,
-//  open-blocks notice, and floating mic.
+//  Phase 4 — far-right column with day-at-a-glance tiles and a real progress
+//  gauge driven by the user's actual tasks. No mock numbers.
 //
 
 #if os(macOS)
@@ -11,6 +11,8 @@ import SwiftUI
 
 struct InsightsPanel: View {
     var onOpenBrainDump: () -> Void = {}
+
+    @Environment(TaskStore.self) private var store
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
@@ -25,6 +27,8 @@ struct InsightsPanel: View {
                         .tracking(0.6)
                         .foregroundStyle(AppColors.textTertiary)
 
+                    let stats = computeStats(store.tasks)
+
                     LazyVGrid(
                         columns: [
                             GridItem(.flexible(), spacing: AppSpacing.sm),
@@ -35,35 +39,34 @@ struct InsightsPanel: View {
                         InsightTile(
                             symbol: "brain.head.profile",
                             title: "Focus Time",
-                            value: "3h 45m",
-                            subtitle: "7 tasks",
+                            value: durationLabel(stats.focusMinutes),
+                            subtitle: tasksLabel(stats.focusCount),
                             accent: AppColors.Category.focusInk
                         )
                         InsightTile(
                             symbol: "person.2.fill",
-                            title: "Meetings",
-                            value: "1h 00m",
-                            subtitle: "1 task",
+                            title: "Get Things Done",
+                            value: durationLabel(stats.gtdMinutes),
+                            subtitle: tasksLabel(stats.gtdCount),
                             accent: AppColors.Category.workInk
                         )
                         InsightTile(
                             symbol: "cup.and.saucer.fill",
-                            title: "Breaks",
-                            value: "1h 15m",
-                            subtitle: "2 breaks",
+                            title: "Energize",
+                            value: durationLabel(stats.energizeMinutes),
+                            subtitle: tasksLabel(stats.energizeCount),
                             accent: AppColors.Category.energizeInk
                         )
                         InsightTile(
                             symbol: "checkmark.circle.fill",
                             title: "Tasks",
-                            value: "13",
-                            subtitle: "Today",
+                            value: "\(stats.totalTasks)",
+                            subtitle: stats.completedCount > 0 ? "\(stats.completedCount) done" : "Today",
                             accent: AppColors.Category.personalInk
                         )
                     }
 
-                    productivityCard
-                    openBlocksCard
+                    progressCard(stats)
                 }
                 .padding(AppSpacing.lg)
                 .padding(.bottom, 80)
@@ -76,37 +79,80 @@ struct InsightsPanel: View {
         .background(AppColors.background)
     }
 
-    // MARK: - Productivity card
-    private var productivityCard: some View {
-        AppCard(padding: AppSpacing.md) {
-            VStack(alignment: .leading, spacing: AppSpacing.xs) {
-                Text("Productivity Forecast")
-                    .font(AppTypography.captionSemibold)
-                    .tracking(0.6)
-                    .foregroundStyle(AppColors.textTertiary)
-                ProductivityGauge(score: 87, caption: "Great day ahead!")
-                    .frame(maxWidth: .infinity)
-            }
+    // MARK: - Stats
+
+    private struct DayStats {
+        let totalTasks: Int
+        let completedCount: Int
+        let focusMinutes: Int
+        let focusCount: Int
+        let gtdMinutes: Int
+        let gtdCount: Int
+        let energizeMinutes: Int
+        let energizeCount: Int
+        var completionPercent: Int {
+            guard totalTasks > 0 else { return 0 }
+            return Int((Double(completedCount) / Double(totalTasks) * 100).rounded())
         }
     }
 
-    // MARK: - Open blocks
-    private var openBlocksCard: some View {
+    private func computeStats(_ tasks: [PlanTask]) -> DayStats {
+        let focus    = tasks.filter { $0.section == .focusTime || $0.section == .create }
+        let gtd      = tasks.filter { $0.section == .getThingsDone }
+        let energize = tasks.filter { $0.section == .energize }
+        return DayStats(
+            totalTasks: tasks.count,
+            completedCount: tasks.filter(\.isCompleted).count,
+            focusMinutes: focus.reduce(0) { $0 + $1.durationMinutes },
+            focusCount: focus.count,
+            gtdMinutes: gtd.reduce(0) { $0 + $1.durationMinutes },
+            gtdCount: gtd.count,
+            energizeMinutes: energize.reduce(0) { $0 + $1.durationMinutes },
+            energizeCount: energize.count
+        )
+    }
+
+    private func durationLabel(_ minutes: Int) -> String {
+        if minutes == 0 { return "—" }
+        if minutes < 60 { return "\(minutes)m" }
+        let h = minutes / 60
+        let m = minutes % 60
+        return m == 0 ? "\(h)h" : "\(h)h \(m)m"
+    }
+
+    private func tasksLabel(_ count: Int) -> String {
+        switch count {
+        case 0: return "No tasks"
+        case 1: return "1 task"
+        default: return "\(count) tasks"
+        }
+    }
+
+    private func progressCaption(percent: Int, total: Int) -> String {
+        guard total > 0 else { return "No tasks yet" }
+        switch percent {
+        case 100: return "Done for the day"
+        case 80...: return "Almost there"
+        case 50...: return "Halfway there"
+        case 1...:  return "Building momentum"
+        default:    return "Let's get started"
+        }
+    }
+
+    // MARK: - Progress card
+
+    private func progressCard(_ stats: DayStats) -> some View {
         AppCard(padding: AppSpacing.md) {
-            HStack(alignment: .top, spacing: 10) {
-                Image(systemName: "square.dashed")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(AppColors.accent)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("2 open blocks")
-                        .font(AppTypography.bodySemibold)
-                        .foregroundStyle(AppColors.textPrimary)
-                    Text("You have 1h 30m of unscheduled time. Tap to fill it.")
-                        .font(AppTypography.caption)
-                        .foregroundStyle(AppColors.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 0)
+            VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                Text("Today's Progress")
+                    .font(AppTypography.captionSemibold)
+                    .tracking(0.6)
+                    .foregroundStyle(AppColors.textTertiary)
+                ProductivityGauge(
+                    score: stats.completionPercent,
+                    caption: progressCaption(percent: stats.completionPercent, total: stats.totalTasks)
+                )
+                .frame(maxWidth: .infinity)
             }
         }
     }

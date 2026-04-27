@@ -125,11 +125,10 @@ final class PlanGenerator {
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
             guard let http = response as? HTTPURLResponse else {
-                return .failure(PlanGeneratorError.network("No HTTP response"))
+                return .failure(PlanGeneratorError.network("Couldn't reach OpenAI."))
             }
             guard (200..<300).contains(http.statusCode) else {
-                let detail = String(data: data, encoding: .utf8).map { String($0.prefix(400)) } ?? ""
-                return .failure(PlanGeneratorError.network("OpenAI error \(http.statusCode): \(detail)"))
+                return .failure(PlanGeneratorError.openAI(status: http.statusCode, body: data))
             }
             let chat = try JSONDecoder().decode(ChatResponse.self, from: data)
             guard let content = chat.choices.first?.message.content,
@@ -139,7 +138,7 @@ final class PlanGenerator {
             let plan = try JSONDecoder().decode(DayPlanJSON.self, from: contentData)
             return .success(plan.toDomain())
         } catch let urlError as URLError {
-            return .failure(PlanGeneratorError.network(urlError.localizedDescription))
+            return .failure(PlanGeneratorError.fromURLError(urlError))
         } catch {
             return .failure(error)
         }
@@ -333,12 +332,40 @@ private struct DayPlanJSON: Decodable {
 
 enum PlanGeneratorError: LocalizedError {
     case network(String)
+    case openAI(status: Int, body: Data)
     case empty
 
     var errorDescription: String? {
         switch self {
-        case .network(let detail): return detail
-        case .empty:               return "OpenAI returned an empty response."
+        case .network(let detail):
+            return detail
+        case .empty:
+            return "OpenAI returned an empty response."
+        case .openAI(let status, let body):
+            switch status {
+            case 401:
+                return "OpenAI rejected the API key. Check Secrets.swift."
+            case 402, 429:
+                return "OpenAI rate limit or quota hit. Try again in a minute."
+            case 500...599:
+                return "OpenAI is having trouble (\(status)). Try again shortly."
+            default:
+                let snippet = String(data: body, encoding: .utf8)?.prefix(200) ?? ""
+                return "OpenAI error \(status). \(snippet)"
+            }
+        }
+    }
+
+    static func fromURLError(_ error: URLError) -> PlanGeneratorError {
+        switch error.code {
+        case .notConnectedToInternet, .networkConnectionLost:
+            return .network("You're offline. Reconnect and try again.")
+        case .timedOut:
+            return .network("Request timed out. Try again.")
+        case .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed:
+            return .network("Couldn't reach OpenAI. Check your connection.")
+        default:
+            return .network(error.localizedDescription)
         }
     }
 }

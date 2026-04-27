@@ -13,11 +13,12 @@ struct DayPlanView: View {
 
     @Environment(TaskStore.self) private var store
     @State private var presentedTask: SelectedTask?
+    @State private var showQuickAdd: Bool = false
 
     private var dateLabel: String {
         let f = DateFormatter()
         f.dateFormat = "MMMM d, yyyy"
-        return f.string(from: MockData.today)
+        return f.string(from: Date())
     }
 
     var body: some View {
@@ -42,7 +43,7 @@ struct DayPlanView: View {
             }
             .background(AppColors.background)
 
-            floatingMic
+            floatingButtons
                 .padding(.trailing, AppSpacing.lg)
                 .padding(.bottom, AppSpacing.lg)
         }
@@ -52,6 +53,14 @@ struct DayPlanView: View {
                 .environment(store)
                 #if os(iOS)
                 .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                #endif
+        }
+        .sheet(isPresented: $showQuickAdd) {
+            QuickAddView()
+                .environment(store)
+                #if os(iOS)
+                .presentationDetents([.medium])
                 .presentationDragIndicator(.visible)
                 #endif
         }
@@ -149,27 +158,45 @@ struct DayPlanView: View {
         .padding(.horizontal, AppSpacing.xl)
     }
 
-    // MARK: - Floating mic
-    private var floatingMic: some View {
-        Button(action: onOpenBrainDump) {
-            ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [AppColors.accent.opacity(0.95), AppColors.accent],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 56, height: 56)
-                    .appShadow(AppShadow.micGlow)
-                Image(systemName: "mic.fill")
-                    .font(.system(size: 22, weight: .semibold))
-                    .foregroundStyle(.white)
+    // MARK: - Floating buttons
+    private var floatingButtons: some View {
+        VStack(spacing: 12) {
+            Button {
+                showQuickAdd = true
+            } label: {
+                ZStack {
+                    Circle()
+                        .fill(AppColors.surface)
+                        .frame(width: 44, height: 44)
+                        .appShadow(AppShadow.card)
+                    Image(systemName: "plus")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundStyle(AppColors.accent)
+                }
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Quick add task")
+
+            Button(action: onOpenBrainDump) {
+                ZStack {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [AppColors.accent.opacity(0.95), AppColors.accent],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 56, height: 56)
+                        .appShadow(AppShadow.micGlow)
+                    Image(systemName: "mic.fill")
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Brain dump")
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Brain dump")
     }
 }
 

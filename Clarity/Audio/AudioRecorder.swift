@@ -2,15 +2,13 @@
 //  AudioRecorder.swift
 //  Clarity
 //
-//  Phase 7 — captures audio via AVAudioRecorder at 16 kHz mono PCM
-//  (the format WhisperKit expects). Exposes live RMS levels for the
-//  waveform and elapsed time for the timer.
+//  Phase 7 — capture audio at 16 kHz mono PCM (what WhisperKit expects).
+//  Phase 11 — cross-platform: iOS uses AVAudioSession + AVAudioApplication
+//  for permissions; macOS uses AVCaptureDevice and skips the audio session.
 //
-//  iOS only for now; macOS audio plumbing arrives in a later phase
-//  (needs a sandbox mic entitlement).
+//  Phase 13 — emits a `silent` failure if the recording was empty / no signal.
 //
 
-#if os(iOS)
 import Foundation
 import AVFoundation
 import Observation
@@ -37,6 +35,8 @@ final class AudioRecorder: NSObject {
     private var recorder: AVAudioRecorder?
     private var meterTask: Task<Void, Never>?
     private var startedAt: Date?
+    /// Peak level seen during the recording. Used to detect "silent" recordings.
+    private var peakLevel: Float = 0
 
     // MARK: - Public API
 
@@ -46,6 +46,7 @@ final class AudioRecorder: NSObject {
         recorder = nil
         elapsedSeconds = 0
         levels = []
+        peakLevel = 0
         state = .idle
     }
 
@@ -54,6 +55,7 @@ final class AudioRecorder: NSObject {
 
         elapsedSeconds = 0
         levels = []
+        peakLevel = 0
 
         state = .requestingPermission
         let granted = await Self.requestPermission()
@@ -63,11 +65,13 @@ final class AudioRecorder: NSObject {
         }
 
         do {
+            #if os(iOS)
             let session = AVAudioSession.sharedInstance()
             try session.setCategory(.playAndRecord,
                                     mode: .measurement,
                                     options: [.allowBluetoothHFP, .defaultToSpeaker])
             try session.setActive(true)
+            #endif
 
             let url = FileManager.default
                 .temporaryDirectory
@@ -104,7 +108,24 @@ final class AudioRecorder: NSObject {
         recorder.stop()
         stopMeterLoop()
         self.recorder = nil
+
+        #if os(iOS)
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        #endif
+
+        // Phase 13: catch silent / no-signal recordings up front so we don't
+        // round-trip them through Whisper for nothing.
+        if elapsedSeconds < 0.6 {
+            state = .failed("That was too short. Try holding the mic and speaking for a moment.")
+            try? FileManager.default.removeItem(at: url)
+            return
+        }
+        if peakLevel < 0.05 {
+            state = .failed("I couldn't hear anything — check your mic and try again.")
+            try? FileManager.default.removeItem(at: url)
+            return
+        }
+
         state = .finished(url)
     }
 
@@ -114,7 +135,7 @@ final class AudioRecorder: NSObject {
         meterTask?.cancel()
         meterTask = Task { [weak self] in
             while !Task.isCancelled {
-                await self?.tick()
+                self?.tick()
                 try? await Task.sleep(for: .milliseconds(50))
             }
         }
@@ -129,18 +150,21 @@ final class AudioRecorder: NSObject {
         guard let recorder else { return }
         recorder.updateMeters()
         let dB = recorder.averagePower(forChannel: 0)
-        // Map -60 dB…0 dB → 0…1, then bias slightly so silence still has a faint shimmer.
         let normalized = max(0, min(1, (dB + 60) / 60))
         levels.append(normalized)
         if levels.count > maxLevels {
             levels.removeFirst(levels.count - maxLevels)
         }
+        peakLevel = max(peakLevel, normalized)
         if let startedAt {
             elapsedSeconds = Date().timeIntervalSince(startedAt)
         }
     }
 
+    // MARK: - Permission
+
     private static func requestPermission() async -> Bool {
+        #if os(iOS)
         switch AVAudioApplication.shared.recordPermission {
         case .granted:
             return true
@@ -155,6 +179,22 @@ final class AudioRecorder: NSObject {
         @unknown default:
             return false
         }
+        #else
+        switch AVCaptureDevice.authorizationStatus(for: .audio) {
+        case .authorized:
+            return true
+        case .denied, .restricted:
+            return false
+        case .notDetermined:
+            return await withCheckedContinuation { cont in
+                AVCaptureDevice.requestAccess(for: .audio) { granted in
+                    cont.resume(returning: granted)
+                }
+            }
+        @unknown default:
+            return false
+        }
+        #endif
     }
 }
 
@@ -167,4 +207,3 @@ extension AudioRecorder {
         return String(format: "%d:%02d", m, s)
     }
 }
-#endif

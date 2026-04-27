@@ -13,10 +13,7 @@ struct BuildingPlanView: View {
     var onCancel: () -> Void = {}
     var onDone: () -> Void = {}
 
-    #if os(iOS)
     @Environment(TaskStore.self) private var store
-    #endif
-
     @State private var generator = PlanGenerator()
     @State private var didStart = false
 
@@ -54,15 +51,10 @@ struct BuildingPlanView: View {
     }
 
     private func runGeneration() async {
-        #if os(iOS)
-        let existing = store.tasks
-        await generator.generate(from: transcript, existing: existing)
+        await generator.generate(from: transcript, existing: store.tasks)
         if generator.error == nil, !generator.tasks.isEmpty {
             store.replaceAll(with: generator.tasks)
         }
-        #else
-        await generator.generate(from: transcript)
-        #endif
     }
 
     // MARK: - Top bar

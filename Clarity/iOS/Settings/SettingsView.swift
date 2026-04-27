@@ -2,28 +2,63 @@
 //  SettingsView.swift
 //  Clarity
 //
-//  Phase 8 — minimal settings tab. The OpenAI key is baked in via
-//  Secrets.swift (gitignored), so no input UI is required.
+//  Cross-platform settings panel. The OpenAI key is baked in via Secrets.swift,
+//  so this is mostly status + maintenance affordances for now.
 //
 
-#if os(iOS)
 import SwiftUI
 
 struct SettingsView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(TaskStore.self) private var store
+
+    @State private var showResetConfirmation = false
+
     var body: some View {
+        #if os(iOS)
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: AppSpacing.lg) {
-                    aiCard
-                    aboutCard
-                }
-                .padding(AppSpacing.lg)
-            }
-            .background(AppColors.background)
-            .navigationTitle("Settings")
-            .navigationBarTitleDisplayMode(.large)
+            content
+                .navigationTitle("Settings")
+                .navigationBarTitleDisplayMode(.large)
         }
+        #else
+        VStack(spacing: 0) {
+            macHeader
+            content
+        }
+        .frame(minWidth: 480, idealWidth: 520, minHeight: 500, idealHeight: 600)
+        #endif
     }
+
+    private var content: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: AppSpacing.lg) {
+                aiCard
+                aboutCard
+                dangerZoneCard
+            }
+            .padding(AppSpacing.lg)
+        }
+        .background(AppColors.background)
+    }
+
+    #if os(macOS)
+    private var macHeader: some View {
+        HStack {
+            Text("Settings")
+                .font(AppTypography.title)
+                .foregroundStyle(AppColors.textPrimary)
+            Spacer()
+            Button("Done", action: { dismiss() })
+                .buttonStyle(.plain)
+                .foregroundStyle(AppColors.accent)
+                .font(AppTypography.bodyMedium)
+        }
+        .padding(.horizontal, AppSpacing.lg)
+        .padding(.top, AppSpacing.lg)
+        .padding(.bottom, AppSpacing.sm)
+    }
+    #endif
 
     // MARK: - AI status
 
@@ -69,6 +104,50 @@ struct SettingsView: View {
         }
     }
 
+    // MARK: - Danger zone
+
+    private var dangerZoneCard: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            sectionLabel("Danger zone")
+            AppCard {
+                VStack(alignment: .leading, spacing: AppSpacing.sm) {
+                    Text("Reset all data")
+                        .font(AppTypography.bodySemibold)
+                        .foregroundStyle(AppColors.textPrimary)
+                    Text("Permanently delete every task on this device. With iCloud Sync on, the deletion replicates to your other devices.")
+                        .font(AppTypography.caption)
+                        .foregroundStyle(AppColors.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button {
+                        showResetConfirmation = true
+                    } label: {
+                        Text("Reset all data")
+                            .font(AppTypography.bodySemibold)
+                            .foregroundStyle(AppColors.Priority.highInk)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                            .background(
+                                Capsule(style: .continuous)
+                                    .stroke(AppColors.Priority.highInk.opacity(0.5), lineWidth: 1)
+                            )
+                    }
+                    .buttonStyle(PressableStyle(pressedScale: 0.98))
+                }
+            }
+        }
+        .alert("Reset all data?", isPresented: $showResetConfirmation) {
+            Button("Cancel", role: .cancel) {}
+            Button("Reset", role: .destructive) {
+                store.deleteAll()
+                #if os(macOS)
+                dismiss()
+                #endif
+            }
+        } message: {
+            Text("This deletes every task. Can't be undone.")
+        }
+    }
+
     private func sectionLabel(_ text: String) -> some View {
         Text(text.uppercased())
             .font(AppTypography.captionSemibold)
@@ -77,4 +156,3 @@ struct SettingsView: View {
             .padding(.horizontal, 4)
     }
 }
-#endif

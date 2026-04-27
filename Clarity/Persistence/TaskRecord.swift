@@ -3,8 +3,8 @@
 //  Clarity
 //
 //  SwiftData persistence model for a planned task.
-//  The UI continues to consume the immutable `PlanTask` value type;
-//  records bridge into it via `toDomain()`.
+//  Phase 9 — every stored property has a default value so the schema is
+//  CloudKit-compatible (CloudKit needs to construct records without args).
 //
 
 import Foundation
@@ -12,27 +12,27 @@ import SwiftData
 
 @Model
 final class TaskRecord {
-    var id: UUID
-    var title: String
-    var categoryRaw: String
-    var priorityRaw: String
-    var sectionRaw: String
-    var startTime: Date
-    var durationMinutes: Int
-    var notes: String?
-    var isCompleted: Bool
+    var id: UUID = UUID()
+    var title: String = ""
+    var categoryRaw: String = "work"
+    var priorityRaw: String = "medium"
+    var sectionRaw: String = "getThingsDone"
+    var startTime: Date = Date()
+    var durationMinutes: Int = 30
+    var notes: String? = nil
+    var isCompleted: Bool = false
 
     @Relationship(deleteRule: .cascade)
-    var subtasks: [SubtaskRecord]
+    var subtasks: [SubtaskRecord]? = []
 
     init(
         id: UUID = UUID(),
-        title: String,
-        category: TaskCategory,
-        priority: TaskPriority,
-        section: DaySectionKind,
-        startTime: Date,
-        durationMinutes: Int,
+        title: String = "",
+        category: TaskCategory = .work,
+        priority: TaskPriority = .medium,
+        section: DaySectionKind = .getThingsDone,
+        startTime: Date = Date(),
+        durationMinutes: Int = 30,
         notes: String? = nil,
         isCompleted: Bool = false,
         subtasks: [SubtaskRecord] = []
@@ -54,7 +54,7 @@ final class TaskRecord {
     var section: DaySectionKind { DaySectionKind(rawValue: sectionRaw) ?? .getThingsDone }
 
     func toDomain() -> PlanTask {
-        let subs = subtasks
+        let subs = (subtasks ?? [])
             .sorted { $0.sortIndex < $1.sortIndex }
             .map { Subtask(id: $0.id, title: $0.title, isCompleted: $0.isCompleted) }
         return PlanTask(

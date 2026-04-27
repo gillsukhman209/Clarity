@@ -14,6 +14,7 @@ struct DashboardView: View {
     var onOpenBrainDump: () -> Void = {}
 
     @Environment(TaskStore.self) private var store
+    @State private var showQuickAdd: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -47,13 +48,28 @@ struct DashboardView: View {
     // MARK: - Header
     private var header: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("Good morning, \(MockData.userFirstName).")
+            Text(greeting)
                 .font(AppTypography.displayLarge)
                 .foregroundStyle(AppColors.textPrimary)
-            Text("Let's make today count.")
+            Text(dateLine)
                 .font(AppTypography.bodyLarge)
                 .foregroundStyle(AppColors.textSecondary)
         }
+    }
+
+    private var greeting: String {
+        let hour = Calendar.current.component(.hour, from: Date())
+        switch hour {
+        case 0..<12:  return "Good morning."
+        case 12..<17: return "Good afternoon."
+        default:      return "Good evening."
+        }
+    }
+
+    private var dateLine: String {
+        let f = DateFormatter()
+        f.dateFormat = "EEEE, MMMM d"
+        return f.string(from: Date())
     }
 
     // MARK: - Toolbar
@@ -132,7 +148,7 @@ struct DashboardView: View {
     }
 
     private var addTaskButton: some View {
-        HoverScaleButton(action: onOpenBrainDump, hoverScale: 1.06) {
+        HoverScaleButton(action: { showQuickAdd = true }, hoverScale: 1.06) {
             ZStack {
                 Circle()
                     .fill(
@@ -147,6 +163,10 @@ struct DashboardView: View {
                     .foregroundStyle(.white)
             }
             .appShadow(AppShadow.card)
+        }
+        .sheet(isPresented: $showQuickAdd) {
+            QuickAddView()
+                .environment(store)
         }
     }
 

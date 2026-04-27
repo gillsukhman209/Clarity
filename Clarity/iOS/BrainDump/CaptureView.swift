@@ -4,19 +4,25 @@
 //
 //  Phase 2 — UI for the brain-dump home / voice capture.
 //  Phase 7 — wired to a real `AudioRecorder` and gated on `TranscriptionService`.
+//  Phase 11 — cross-platform (iOS + macOS).
+//  Phase 13 — surfaces denied/failed states with actionable recovery.
 //
 
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
+#if canImport(AppKit)
+import AppKit
+#endif
 
 struct CaptureView: View {
     var onCancel: () -> Void = {}
     /// Called once the recorder finishes; the URL points at a 16 kHz mono WAV ready for transcription.
     var onFinishedRecording: (URL) -> Void = { _ in }
 
-    #if os(iOS)
     @State private var recorder = AudioRecorder()
     @Environment(TranscriptionService.self) private var transcription
-    #endif
 
     var body: some View {
         VStack(spacing: 0) {
@@ -31,16 +37,12 @@ struct CaptureView: View {
                 .padding(.bottom, AppSpacing.lg)
         }
         .background(AppColors.background)
-        #if os(iOS)
         .onChange(of: recorder.state) { _, newValue in
             if case let .finished(url) = newValue {
                 onFinishedRecording(url)
             }
         }
-        .onDisappear {
-            recorder.reset()
-        }
-        #endif
+        .onDisappear { recorder.reset() }
     }
 
     // MARK: - Top bar
@@ -72,29 +74,25 @@ struct CaptureView: View {
         .padding(.horizontal, AppSpacing.lg)
     }
 
-    // MARK: - Orb / waveform / timer
+    // MARK: - Orb / waveform / status
 
-    private var isRecording: Bool {
-        #if os(iOS)
-        return recorder.state == .recording
-        #else
-        return false
-        #endif
-    }
+    private var isRecording: Bool { recorder.state == .recording }
 
     private var canTap: Bool {
-        #if os(iOS)
-        return transcription.isReady && recorder.state != .denied
-        #else
-        return false
-        #endif
+        switch recorder.state {
+        case .denied, .requestingPermission: return false
+        default: break
+        }
+        switch transcription.state {
+        case .preparing, .idle, .failed: return false
+        case .ready, .transcribing: return true
+        }
     }
 
     private var primaryLabel: String {
-        #if os(iOS)
         switch recorder.state {
         case .denied:
-            return "Microphone access denied. Enable it in Settings."
+            return "Microphone access denied."
         case .failed(let msg):
             return msg
         default:
@@ -110,15 +108,11 @@ struct CaptureView: View {
         case .idle:
             return "Loading…"
         }
-        #else
-        return "iOS only"
-        #endif
     }
 
     private var orbAndWaveform: some View {
         VStack(spacing: AppSpacing.xl) {
             Button {
-                #if os(iOS)
                 Task {
                     if isRecording {
                         recorder.stop()
@@ -126,7 +120,6 @@ struct CaptureView: View {
                         await recorder.start()
                     }
                 }
-                #endif
             } label: {
                 ZStack {
                     GlowingOrb(size: 180, isPulsing: isRecording)
@@ -154,8 +147,10 @@ struct CaptureView: View {
     private var statusBlock: some View {
         VStack(spacing: AppSpacing.sm) {
             if isRecording {
-                liveWaveform
-                Text(timerLabel)
+                LiveWaveformBars(levels: recorder.levels, color: AppColors.accent.opacity(0.65))
+                    .frame(height: 36)
+                    .transition(.opacity)
+                Text(recorder.elapsedLabel)
                     .font(.system(size: 18, weight: .medium, design: .monospaced))
                     .foregroundStyle(AppColors.textSecondary)
                     .transition(.opacity)
@@ -166,35 +161,37 @@ struct CaptureView: View {
                     .frame(minHeight: 36)
                     .multilineTextAlignment(.center)
                     .transition(.opacity)
-                Text("0:00")
-                    .font(.system(size: 18, weight: .medium, design: .monospaced))
-                    .foregroundStyle(AppColors.textTertiary)
-                    .transition(.opacity)
+                if recorder.state == .denied {
+                    Button {
+                        openSystemSettings()
+                    } label: {
+                        Text("Open Settings")
+                            .font(AppTypography.bodySemibold)
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 18)
+                            .padding(.vertical, 10)
+                            .background(Capsule(style: .continuous).fill(AppColors.accent))
+                    }
+                    .buttonStyle(PressableStyle(pressedScale: 0.98))
+                } else {
+                    Text("0:00")
+                        .font(.system(size: 18, weight: .medium, design: .monospaced))
+                        .foregroundStyle(AppColors.textTertiary)
+                        .transition(.opacity)
+                }
             }
         }
     }
 
-    @ViewBuilder
-    private var liveWaveform: some View {
-        #if os(iOS)
-        LiveWaveformBars(levels: recorder.levels, color: AppColors.accent.opacity(0.65))
-            .frame(height: 36)
-            .transition(.opacity)
-        #else
-        Waveform(
-            barCount: 48, maxHeight: 36,
-            color: AppColors.accent.opacity(0.65), seed: 0.4, animated: true
-        )
-        .frame(height: 36)
-        .transition(.opacity)
-        #endif
-    }
-
-    private var timerLabel: String {
-        #if os(iOS)
-        return recorder.elapsedLabel
-        #else
-        return "0:00"
+    private func openSystemSettings() {
+        #if canImport(UIKit)
+        if let url = URL(string: UIApplication.openSettingsURLString) {
+            UIApplication.shared.open(url)
+        }
+        #elseif canImport(AppKit)
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
+            NSWorkspace.shared.open(url)
+        }
         #endif
     }
 

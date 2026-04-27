@@ -47,9 +47,22 @@ final class TaskStore {
         refresh()
     }
 
+    /// Wipes every task on this device. With CloudKit on, the deletion
+    /// replicates to your iCloud private database and propagates to other
+    /// signed-in devices in the background.
+    func deleteAll() {
+        let descriptor = FetchDescriptor<TaskRecord>()
+        let existing = (try? context.fetch(descriptor)) ?? []
+        for record in existing {
+            context.delete(record)
+        }
+        save()
+        refresh()
+    }
+
     func toggleSubtask(taskID: UUID, subtaskID: UUID) {
         guard let record = fetchRecord(taskID),
-              let sub = record.subtasks.first(where: { $0.id == subtaskID })
+              let sub = (record.subtasks ?? []).first(where: { $0.id == subtaskID })
         else { return }
         sub.isCompleted.toggle()
         save()
