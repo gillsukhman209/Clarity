@@ -3,13 +3,16 @@
 //  Clarity
 //
 //  Phase 4 — top-level macOS layout: sidebar | dashboard | task detail | insights.
+//  Phase 6 — selection drives by ID, content reads from TaskStore.
 //
 
 #if os(macOS)
 import SwiftUI
 
 struct MacRootView: View {
-    @State private var selectedTask: PlanTask? = MockData.featuredTask
+    @Environment(TaskStore.self) private var store
+
+    @State private var selectedTaskID: UUID?
     @State private var showBrainDump: Bool = false
 
     var body: some View {
@@ -20,7 +23,7 @@ struct MacRootView: View {
             Divider().background(AppColors.divider)
 
             DashboardView(
-                selectedTask: $selectedTask,
+                selectedTaskID: $selectedTaskID,
                 onOpenBrainDump: { showBrainDump = true }
             )
             .frame(minWidth: 420)
@@ -28,10 +31,9 @@ struct MacRootView: View {
             Divider().background(AppColors.divider)
 
             Group {
-                if let selected = selectedTask {
-                    MacTaskDetailPanel(task: selected) {
-                        // Mock complete: clear selection.
-                        selectedTask = nil
+                if let id = selectedTaskID {
+                    MacTaskDetailPanel(taskID: id) {
+                        selectedTaskID = nil
                     }
                 } else {
                     emptyDetail
@@ -46,6 +48,9 @@ struct MacRootView: View {
         }
         .frame(minWidth: 1200, minHeight: 720)
         .background(AppColors.background)
+        .onAppear {
+            if selectedTaskID == nil { selectedTaskID = store.firstTaskID }
+        }
         .sheet(isPresented: $showBrainDump) {
             BrainDumpFlowView()
                 .frame(minWidth: 480, minHeight: 720)

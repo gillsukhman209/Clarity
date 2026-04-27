@@ -1,0 +1,27 @@
+//
+//  SubtaskRecord.swift
+//  Clarity
+//
+
+import Foundation
+import SwiftData
+
+@Model
+final class SubtaskRecord {
+    var id: UUID
+    var title: String
+    var isCompleted: Bool
+    var sortIndex: Int
+
+    init(
+        id: UUID = UUID(),
+        title: String,
+        isCompleted: Bool = false,
+        sortIndex: Int = 0
+    ) {
+        self.id = id
+        self.title = title
+        self.isCompleted = isCompleted
+        self.sortIndex = sortIndex
+    }
+}

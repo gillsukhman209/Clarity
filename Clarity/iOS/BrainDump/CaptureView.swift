@@ -67,38 +67,53 @@ struct CaptureView: View {
                 if isRecording {
                     onFinishedRecording()
                 } else {
-                    isRecording = true
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        isRecording = true
+                    }
                 }
             } label: {
                 ZStack {
-                    GlowingOrb(size: 180)
+                    GlowingOrb(size: 180, isPulsing: isRecording)
                     Image(systemName: "mic.fill")
                         .font(.system(size: 44, weight: .semibold))
                         .foregroundStyle(.white)
                         .shadow(color: AppColors.accent.opacity(0.35), radius: 6)
+                        .scaleEffect(isRecording ? 1.05 : 1.0)
+                        .animation(.easeInOut(duration: 0.25), value: isRecording)
                 }
                 .frame(width: 280, height: 280)
                 .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressableStyle(pressedScale: 0.96))
 
             VStack(spacing: AppSpacing.sm) {
                 if isRecording {
-                    Waveform(barCount: 48, maxHeight: 36, color: AppColors.accent.opacity(0.65), seed: 0.4)
-                        .frame(height: 36)
+                    Waveform(
+                        barCount: 48,
+                        maxHeight: 36,
+                        color: AppColors.accent.opacity(0.65),
+                        seed: 0.4,
+                        animated: true
+                    )
+                    .frame(height: 36)
+                    .transition(.opacity)
                     Text(mockTimer)
                         .font(.system(size: 18, weight: .medium, design: .monospaced))
                         .foregroundStyle(AppColors.textSecondary)
+                        .transition(.opacity)
                 } else {
                     Text("Tap to start")
                         .font(AppTypography.bodyMedium)
                         .foregroundStyle(AppColors.textTertiary)
                         .frame(height: 36)
+                        .transition(.opacity)
                     Text("0:00")
                         .font(.system(size: 18, weight: .medium, design: .monospaced))
                         .foregroundStyle(AppColors.textTertiary)
+                        .transition(.opacity)
                 }
             }
+            .animation(.easeInOut(duration: 0.25), value: isRecording)
             .padding(.horizontal, AppSpacing.lg)
         }
     }

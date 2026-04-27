@@ -3,6 +3,7 @@
 //  Clarity
 //
 //  Phase 3 — iOS Today plan with time gutter, pastel task blocks, and floating mic.
+//  Phase 6 — backed by `TaskStore` instead of `MockData`.
 //
 
 import SwiftUI
@@ -10,7 +11,8 @@ import SwiftUI
 struct DayPlanView: View {
     var onOpenBrainDump: () -> Void = {}
 
-    @State private var selectedTask: PlanTask?
+    @Environment(TaskStore.self) private var store
+    @State private var presentedTask: SelectedTask?
 
     private var dateLabel: String {
         let f = DateFormatter()
@@ -25,8 +27,8 @@ struct DayPlanView: View {
                 Divider().background(AppColors.divider)
                 ScrollView {
                     VStack(spacing: AppSpacing.xs) {
-                        ForEach(Array(MockData.todayTasks.enumerated()), id: \.element.id) { index, task in
-                            row(for: task, previous: index > 0 ? MockData.todayTasks[index - 1] : nil)
+                        ForEach(Array(store.tasks.enumerated()), id: \.element.id) { index, task in
+                            row(for: task, previous: index > 0 ? store.tasks[index - 1] : nil)
                         }
                     }
                     .padding(.horizontal, AppSpacing.md)
@@ -40,8 +42,10 @@ struct DayPlanView: View {
                 .padding(.trailing, AppSpacing.lg)
                 .padding(.bottom, AppSpacing.lg)
         }
-        .sheet(item: $selectedTask) { task in
-            TaskDetailView(task: task) { selectedTask = nil }
+        .animation(.easeInOut(duration: 0.25), value: store.tasks.map(\.isCompleted))
+        .sheet(item: $presentedTask) { selection in
+            TaskDetailView(taskID: selection.id) { presentedTask = nil }
+                .environment(store)
                 #if os(iOS)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
@@ -103,7 +107,7 @@ struct DayPlanView: View {
             .frame(width: 48, alignment: .leading)
 
             Button {
-                selectedTask = task
+                presentedTask = SelectedTask(id: task.id)
             } label: {
                 TaskBlock(task: task)
             }
@@ -143,4 +147,8 @@ struct DayPlanView: View {
         .buttonStyle(.plain)
         .accessibilityLabel("Brain dump")
     }
+}
+
+private struct SelectedTask: Identifiable, Hashable {
+    let id: UUID
 }

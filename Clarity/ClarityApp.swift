@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import SwiftData
 
 @main
 struct ClarityApp: App {
@@ -12,6 +13,7 @@ struct ClarityApp: App {
             ContentView()
                 .background(AppColors.background.ignoresSafeArea())
         }
+        .modelContainer(for: [TaskRecord.self, SubtaskRecord.self])
         #if os(macOS)
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1280, height: 820)

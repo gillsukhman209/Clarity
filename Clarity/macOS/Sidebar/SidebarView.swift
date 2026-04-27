@@ -37,6 +37,7 @@ struct SidebarView: View {
     ]
 
     @State private var selected: String = "Today"
+    @State private var hoveredItem: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -95,7 +96,10 @@ struct SidebarView: View {
 
     // MARK: - Rows
     private func navRow(_ item: NavItem) -> some View {
-        Button {
+        let isSelected = item.title == selected
+        let isHovered  = hoveredItem == item.title
+
+        return Button {
             selected = item.title
         } label: {
             HStack(spacing: 10) {
@@ -106,19 +110,31 @@ struct SidebarView: View {
                     .font(AppTypography.bodyMedium)
                 Spacer()
             }
-            .foregroundStyle(item.title == selected ? AppColors.textPrimary : AppColors.textSecondary)
+            .foregroundStyle(isSelected ? AppColors.textPrimary : AppColors.textSecondary)
             .padding(.horizontal, 10)
             .padding(.vertical, 7)
             .background(
                 RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
-                    .fill(item.title == selected ? AppColors.surface : Color.clear)
+                    .fill(rowBackground(selected: isSelected, hovered: isHovered))
             )
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .onHover { hovering in
+            hoveredItem = hovering ? item.title : (hoveredItem == item.title ? nil : hoveredItem)
+        }
+        .animation(.easeOut(duration: 0.12), value: isHovered)
+    }
+
+    private func rowBackground(selected: Bool, hovered: Bool) -> Color {
+        if selected { return AppColors.surface }
+        if hovered  { return AppColors.surface.opacity(0.5) }
+        return .clear
     }
 
     private func smartRow(_ list: SmartList) -> some View {
-        HStack(spacing: 10) {
+        let isHovered = hoveredItem == "smart-\(list.title)"
+        return HStack(spacing: 10) {
             Circle()
                 .fill(list.dotColor)
                 .frame(width: 8, height: 8)
@@ -130,6 +146,15 @@ struct SidebarView: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
+                .fill(isHovered ? AppColors.surface.opacity(0.5) : Color.clear)
+        )
+        .onHover { hovering in
+            let key = "smart-\(list.title)"
+            hoveredItem = hovering ? key : (hoveredItem == key ? nil : hoveredItem)
+        }
+        .animation(.easeOut(duration: 0.12), value: isHovered)
     }
 
     // MARK: - Sync footer

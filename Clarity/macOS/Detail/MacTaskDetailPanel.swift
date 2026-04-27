@@ -3,40 +3,68 @@
 //  Clarity
 //
 //  Phase 4 — right-side panel showing the currently selected task.
+//  Phase 6 — reads from TaskStore by ID, supports complete + subtask toggles.
 //
 
 #if os(macOS)
 import SwiftUI
 
 struct MacTaskDetailPanel: View {
-    let task: PlanTask
+    let taskID: UUID
     var onComplete: () -> Void = {}
 
+    @Environment(TaskStore.self) private var store
+
     var body: some View {
+        Group {
+            if let task = store.task(with: taskID) {
+                content(for: task)
+            } else {
+                missing
+            }
+        }
+        .frame(maxHeight: .infinity, alignment: .top)
+        .background(AppColors.surface)
+    }
+
+    private var missing: some View {
+        VStack(spacing: AppSpacing.xs) {
+            Spacer()
+            Image(systemName: "tray")
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(AppColors.textTertiary)
+            Text("Task no longer exists")
+                .font(AppTypography.bodyMedium)
+                .foregroundStyle(AppColors.textSecondary)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    @ViewBuilder
+    private func content(for task: PlanTask) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: AppSpacing.lg) {
-                    headerCard
-                    timeAndPriority
+                    headerCard(task)
+                    timeAndPriority(task)
                     if let notes = task.notes, !notes.isEmpty {
                         whyAndNotes(notes)
                     }
-                    subtasks
+                    subtasksSection(task)
                 }
                 .padding(AppSpacing.lg)
             }
 
             Divider().background(AppColors.divider)
 
-            completeButton
+            completeButton(task)
                 .padding(AppSpacing.lg)
         }
-        .frame(maxHeight: .infinity, alignment: .top)
-        .background(AppColors.surface)
     }
 
     // MARK: - Header
-    private var headerCard: some View {
+    private func headerCard(_ task: PlanTask) -> some View {
         HStack(alignment: .top, spacing: 12) {
             ZStack {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -50,6 +78,7 @@ struct MacTaskDetailPanel: View {
                 Text(task.title)
                     .font(AppTypography.title)
                     .foregroundStyle(AppColors.textPrimary)
+                    .strikethrough(task.isCompleted, color: AppColors.textTertiary)
                     .fixedSize(horizontal: false, vertical: true)
                 CategoryTag(category: task.category, showsIcon: true)
             }
@@ -58,7 +87,7 @@ struct MacTaskDetailPanel: View {
     }
 
     // MARK: - Time + Priority
-    private var timeAndPriority: some View {
+    private func timeAndPriority(_ task: PlanTask) -> some View {
         VStack(alignment: .leading, spacing: AppSpacing.sm) {
             HStack(spacing: 6) {
                 Text(task.timeRangeLabel)
@@ -89,7 +118,7 @@ struct MacTaskDetailPanel: View {
 
     // MARK: - Subtasks
     @ViewBuilder
-    private var subtasks: some View {
+    private func subtasksSection(_ task: PlanTask) -> some View {
         if !task.subtasks.isEmpty {
             VStack(alignment: .leading, spacing: AppSpacing.xs) {
                 Text("Subtasks")
@@ -98,16 +127,25 @@ struct MacTaskDetailPanel: View {
                     .foregroundStyle(AppColors.textTertiary)
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(task.subtasks) { sub in
-                        HStack(spacing: 10) {
-                            Image(systemName: sub.isCompleted ? "checkmark.circle.fill" : "circle")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(sub.isCompleted ? AppColors.accent : AppColors.textTertiary)
-                            Text(sub.title)
-                                .font(AppTypography.body)
-                                .foregroundStyle(AppColors.textPrimary)
-                                .strikethrough(sub.isCompleted, color: AppColors.textTertiary)
-                            Spacer()
+                        Button {
+                            withAnimation(.spring(response: 0.28, dampingFraction: 0.75)) {
+                                store.toggleSubtask(taskID: task.id, subtaskID: sub.id)
+                            }
+                        } label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: sub.isCompleted ? "checkmark.circle.fill" : "circle")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundStyle(sub.isCompleted ? AppColors.accent : AppColors.textTertiary)
+                                    .symbolEffect(.bounce, value: sub.isCompleted)
+                                Text(sub.title)
+                                    .font(AppTypography.body)
+                                    .foregroundStyle(AppColors.textPrimary)
+                                    .strikethrough(sub.isCompleted, color: AppColors.textTertiary)
+                                Spacer()
+                            }
+                            .contentShape(Rectangle())
                         }
+                        .buttonStyle(.plain)
                     }
                 }
             }
@@ -115,12 +153,16 @@ struct MacTaskDetailPanel: View {
     }
 
     // MARK: - Complete
-    private var completeButton: some View {
-        Button(action: onComplete) {
+    private func completeButton(_ task: PlanTask) -> some View {
+        HoverScaleButton(action: {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                store.toggleComplete(task.id)
+            }
+        }, hoverScale: 1.02) {
             HStack(spacing: 8) {
-                Image(systemName: "checkmark.circle")
+                Image(systemName: task.isCompleted ? "arrow.uturn.backward.circle" : "checkmark.circle")
                     .font(.system(size: 14, weight: .semibold))
-                Text("Complete Task")
+                Text(task.isCompleted ? "Mark as Incomplete" : "Complete Task")
                     .font(AppTypography.bodySemibold)
             }
             .foregroundStyle(.white)
@@ -128,7 +170,6 @@ struct MacTaskDetailPanel: View {
             .padding(.vertical, 12)
             .background(Capsule(style: .continuous).fill(AppColors.accent))
         }
-        .buttonStyle(.plain)
     }
 }
 #endif

@@ -106,7 +106,8 @@ struct TranscribingView: View {
                 barCount: 56,
                 maxHeight: 44,
                 color: AppColors.accent.opacity(0.55),
-                seed: 1.2
+                seed: 1.2,
+                animated: true
             )
             .frame(height: 44)
 

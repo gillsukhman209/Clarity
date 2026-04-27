@@ -3,30 +3,57 @@
 //  Clarity
 //
 //  Phase 3 — task details sheet.
+//  Phase 6 — reads from `TaskStore` and wires Mark Complete + Delete.
 //
 
 import SwiftUI
 
 struct TaskDetailView: View {
-    let task: PlanTask
+    let taskID: UUID
     var onClose: () -> Void = {}
 
+    @Environment(TaskStore.self) private var store
+
     var body: some View {
+        if let task = store.task(with: taskID) {
+            content(for: task)
+        } else {
+            // Task was deleted while open — fall back to a tidy empty state.
+            missing
+        }
+    }
+
+    private func content(for task: PlanTask) -> some View {
         VStack(spacing: 0) {
             topBar
             ScrollView(showsIndicators: false) {
                 VStack(spacing: AppSpacing.lg) {
-                    iconAndTitle
-                    detailsCard
+                    iconAndTitle(task)
+                    detailsCard(task)
                     if let notes = task.notes, !notes.isEmpty {
                         notesSection(notes)
                     }
-                    actions
+                    actions(task)
                 }
                 .padding(.horizontal, AppSpacing.lg)
                 .padding(.top, AppSpacing.md)
                 .padding(.bottom, AppSpacing.xl)
             }
+        }
+        .background(AppColors.background)
+    }
+
+    private var missing: some View {
+        VStack(spacing: AppSpacing.sm) {
+            topBar
+            Spacer()
+            Image(systemName: "tray")
+                .font(.system(size: 28, weight: .semibold))
+                .foregroundStyle(AppColors.textTertiary)
+            Text("Task no longer exists")
+                .font(AppTypography.bodyMedium)
+                .foregroundStyle(AppColors.textSecondary)
+            Spacer()
         }
         .background(AppColors.background)
     }
@@ -51,7 +78,7 @@ struct TaskDetailView: View {
     }
 
     // MARK: - Icon + title
-    private var iconAndTitle: some View {
+    private func iconAndTitle(_ task: PlanTask) -> some View {
         VStack(spacing: AppSpacing.sm) {
             ZStack {
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
@@ -75,7 +102,7 @@ struct TaskDetailView: View {
     }
 
     // MARK: - Details card
-    private var detailsCard: some View {
+    private func detailsCard(_ task: PlanTask) -> some View {
         AppCard(padding: 0, cornerRadius: AppRadius.large) {
             VStack(spacing: 0) {
                 detailRow(label: "Duration", value: AnyView(
@@ -132,13 +159,18 @@ struct TaskDetailView: View {
     }
 
     // MARK: - Actions
-    private var actions: some View {
+    private func actions(_ task: PlanTask) -> some View {
         VStack(spacing: AppSpacing.sm) {
-            Button {} label: {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    store.toggleComplete(task.id)
+                }
+                onClose()
+            } label: {
                 HStack(spacing: 8) {
-                    Image(systemName: "checkmark.circle")
+                    Image(systemName: task.isCompleted ? "arrow.uturn.backward.circle" : "checkmark.circle")
                         .font(.system(size: 16, weight: .semibold))
-                    Text("Mark as Complete")
+                    Text(task.isCompleted ? "Mark as Incomplete" : "Mark as Complete")
                         .font(AppTypography.bodySemibold)
                 }
                 .foregroundStyle(AppColors.accent)
@@ -154,7 +186,10 @@ struct TaskDetailView: View {
             }
             .buttonStyle(.plain)
 
-            Button {} label: {
+            Button {
+                store.delete(task.id)
+                onClose()
+            } label: {
                 Text("Delete Task")
                     .font(AppTypography.bodySemibold)
                     .foregroundStyle(AppColors.Priority.highInk)

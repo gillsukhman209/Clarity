@@ -3,14 +3,17 @@
 //  Clarity
 //
 //  Phase 4 — main center column: greeting, toolbar, day plan grouped into sections.
+//  Phase 6 — backed by TaskStore.
 //
 
 #if os(macOS)
 import SwiftUI
 
 struct DashboardView: View {
-    @Binding var selectedTask: PlanTask?
+    @Binding var selectedTaskID: UUID?
     var onOpenBrainDump: () -> Void = {}
+
+    @Environment(TaskStore.self) private var store
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -25,7 +28,7 @@ struct DashboardView: View {
 
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: AppSpacing.xl) {
-                    ForEach(MockData.daySections) { section in
+                    ForEach(store.daySections) { section in
                         sectionView(section)
                     }
                 }
@@ -80,17 +83,16 @@ struct DashboardView: View {
     }
 
     private func chevronButton(symbol: String) -> some View {
-        Button {} label: {
+        HoverScaleButton(action: {}) {
             Image(systemName: symbol)
                 .font(.system(size: 11, weight: .bold))
                 .foregroundStyle(AppColors.textSecondary)
                 .frame(width: 24, height: 24)
         }
-        .buttonStyle(.plain)
     }
 
     private var replanButton: some View {
-        Button {} label: {
+        HoverScaleButton(action: {}) {
             HStack(spacing: 6) {
                 Image(systemName: "sparkles")
                     .font(.system(size: 12, weight: .semibold))
@@ -102,7 +104,6 @@ struct DashboardView: View {
             .padding(.vertical, 7)
             .background(Capsule(style: .continuous).fill(AppColors.accentSoft.opacity(0.45)))
         }
-        .buttonStyle(.plain)
     }
 
     private var searchField: some View {
@@ -127,7 +128,7 @@ struct DashboardView: View {
     }
 
     private var addTaskButton: some View {
-        Button(action: onOpenBrainDump) {
+        HoverScaleButton(action: onOpenBrainDump, hoverScale: 1.06) {
             ZStack {
                 Circle()
                     .fill(
@@ -143,7 +144,6 @@ struct DashboardView: View {
             }
             .appShadow(AppShadow.card)
         }
-        .buttonStyle(.plain)
     }
 
     // MARK: - Section
@@ -154,21 +154,22 @@ struct DashboardView: View {
 
             VStack(spacing: AppSpacing.xs) {
                 ForEach(section.tasks) { task in
-                    Button {
-                        selectedTask = task
-                    } label: {
+                    HoverScaleButton(
+                        action: { selectedTaskID = task.id },
+                        hoverScale: 1.005
+                    ) {
                         HStack(spacing: AppSpacing.sm) {
                             Text(task.startTimeLabel)
                                 .font(AppTypography.captionMedium)
                                 .foregroundStyle(AppColors.textTertiary)
                                 .frame(width: 72, alignment: .leading)
-                            TaskBlock(task: task, isSelected: task.id == selectedTask?.id)
+                            TaskBlock(task: task, isSelected: task.id == selectedTaskID)
                         }
                     }
-                    .buttonStyle(.plain)
                 }
             }
         }
+        .animation(.easeInOut(duration: 0.2), value: section.tasks.map(\.isCompleted))
     }
 }
 #endif

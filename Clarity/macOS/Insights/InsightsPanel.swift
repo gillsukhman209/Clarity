@@ -113,7 +113,7 @@ struct InsightsPanel: View {
 
     // MARK: - Floating mic
     private var floatingMic: some View {
-        Button(action: onOpenBrainDump) {
+        HoverScaleButton(action: onOpenBrainDump, hoverScale: 1.06) {
             ZStack {
                 Circle()
                     .fill(
@@ -130,7 +130,6 @@ struct InsightsPanel: View {
                     .foregroundStyle(.white)
             }
         }
-        .buttonStyle(.plain)
         .accessibilityLabel("Brain dump")
     }
 }
