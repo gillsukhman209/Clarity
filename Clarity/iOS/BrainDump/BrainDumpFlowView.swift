@@ -3,7 +3,7 @@
 //  Clarity
 //
 //  Hosts the three brain-dump states (capture → transcribing → building).
-//  Phase 5: pleasant cross-fade + slide transitions between states.
+//  Phase 7: passes the real recording URL + transcript between steps.
 //
 
 import SwiftUI
@@ -17,6 +17,8 @@ enum BrainDumpStep: Int {
 struct BrainDumpFlowView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var step: BrainDumpStep = .capture
+    @State private var recordingURL: URL?
+    @State private var transcript: String = ""
 
     var body: some View {
         ZStack {
@@ -26,14 +28,21 @@ struct BrainDumpFlowView: View {
             case .capture:
                 CaptureView(
                     onCancel: { dismiss() },
-                    onFinishedRecording: { advance(to: .transcribing) }
+                    onFinishedRecording: { url in
+                        recordingURL = url
+                        advance(to: .transcribing)
+                    }
                 )
                 .transition(transition(forwardEdge: .leading))
                 .id("capture")
             case .transcribing:
                 TranscribingView(
+                    recordingURL: recordingURL,
                     onCancel: { dismiss() },
-                    onContinue: { advance(to: .building) }
+                    onContinue: { resolved in
+                        transcript = resolved
+                        advance(to: .building)
+                    }
                 )
                 .transition(transition(forwardEdge: .leading))
                 .id("transcribing")
@@ -53,7 +62,6 @@ struct BrainDumpFlowView: View {
         withAnimation(.easeInOut(duration: 0.32)) { step = next }
     }
 
-    /// Slide outgoing toward `forwardEdge` and fade incoming in.
     private func transition(forwardEdge: Edge) -> AnyTransition {
         .asymmetric(
             insertion: .opacity.combined(with: .move(edge: .trailing)),

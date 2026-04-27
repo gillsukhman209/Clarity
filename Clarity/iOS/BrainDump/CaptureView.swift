@@ -2,19 +2,21 @@
 //  CaptureView.swift
 //  Clarity
 //
-//  Phase 2 — Brain-dump home / voice capture.
+//  Phase 2 — UI for the brain-dump home / voice capture.
+//  Phase 7 — wired to a real `AudioRecorder` and gated on `TranscriptionService`.
 //
 
 import SwiftUI
 
 struct CaptureView: View {
     var onCancel: () -> Void = {}
-    var onFinishedRecording: () -> Void = {}
+    /// Called once the recorder finishes; the URL points at a 16 kHz mono WAV ready for transcription.
+    var onFinishedRecording: (URL) -> Void = { _ in }
 
-    /// Mock state: `false` → idle ("tap to start"); `true` → recording (timer + waveform).
-    @State private var isRecording: Bool = false
-    /// Static mock timer string. We don't actually count for Phase 2.
-    private let mockTimer: String = "0:23"
+    #if os(iOS)
+    @State private var recorder = AudioRecorder()
+    @Environment(TranscriptionService.self) private var transcription
+    #endif
 
     var body: some View {
         VStack(spacing: 0) {
@@ -29,6 +31,16 @@ struct CaptureView: View {
                 .padding(.bottom, AppSpacing.lg)
         }
         .background(AppColors.background)
+        #if os(iOS)
+        .onChange(of: recorder.state) { _, newValue in
+            if case let .finished(url) = newValue {
+                onFinishedRecording(url)
+            }
+        }
+        .onDisappear {
+            recorder.reset()
+        }
+        #endif
     }
 
     // MARK: - Top bar
@@ -60,17 +72,61 @@ struct CaptureView: View {
         .padding(.horizontal, AppSpacing.lg)
     }
 
-    // MARK: - Orb, waveform, timer
+    // MARK: - Orb / waveform / timer
+
+    private var isRecording: Bool {
+        #if os(iOS)
+        return recorder.state == .recording
+        #else
+        return false
+        #endif
+    }
+
+    private var canTap: Bool {
+        #if os(iOS)
+        return transcription.isReady && recorder.state != .denied
+        #else
+        return false
+        #endif
+    }
+
+    private var primaryLabel: String {
+        #if os(iOS)
+        switch recorder.state {
+        case .denied:
+            return "Microphone access denied. Enable it in Settings."
+        case .failed(let msg):
+            return msg
+        default:
+            break
+        }
+        switch transcription.state {
+        case .preparing:
+            return "Preparing voice…"
+        case .failed(let msg):
+            return msg
+        case .ready, .transcribing:
+            return isRecording ? "Tap to stop" : "Tap to start"
+        case .idle:
+            return "Loading…"
+        }
+        #else
+        return "iOS only"
+        #endif
+    }
+
     private var orbAndWaveform: some View {
         VStack(spacing: AppSpacing.xl) {
             Button {
-                if isRecording {
-                    onFinishedRecording()
-                } else {
-                    withAnimation(.easeInOut(duration: 0.25)) {
-                        isRecording = true
+                #if os(iOS)
+                Task {
+                    if isRecording {
+                        recorder.stop()
+                    } else {
+                        await recorder.start()
                     }
                 }
+                #endif
             } label: {
                 ZStack {
                     GlowingOrb(size: 180, isPulsing: isRecording)
@@ -82,40 +138,64 @@ struct CaptureView: View {
                         .animation(.easeInOut(duration: 0.25), value: isRecording)
                 }
                 .frame(width: 280, height: 280)
+                .opacity(canTap ? 1.0 : 0.7)
                 .contentShape(Rectangle())
             }
             .buttonStyle(PressableStyle(pressedScale: 0.96))
+            .disabled(!canTap)
 
-            VStack(spacing: AppSpacing.sm) {
-                if isRecording {
-                    Waveform(
-                        barCount: 48,
-                        maxHeight: 36,
-                        color: AppColors.accent.opacity(0.65),
-                        seed: 0.4,
-                        animated: true
-                    )
-                    .frame(height: 36)
-                    .transition(.opacity)
-                    Text(mockTimer)
-                        .font(.system(size: 18, weight: .medium, design: .monospaced))
-                        .foregroundStyle(AppColors.textSecondary)
-                        .transition(.opacity)
-                } else {
-                    Text("Tap to start")
-                        .font(AppTypography.bodyMedium)
-                        .foregroundStyle(AppColors.textTertiary)
-                        .frame(height: 36)
-                        .transition(.opacity)
-                    Text("0:00")
-                        .font(.system(size: 18, weight: .medium, design: .monospaced))
-                        .foregroundStyle(AppColors.textTertiary)
-                        .transition(.opacity)
-                }
-            }
-            .animation(.easeInOut(duration: 0.25), value: isRecording)
-            .padding(.horizontal, AppSpacing.lg)
+            statusBlock
+                .animation(.easeInOut(duration: 0.25), value: isRecording)
+                .padding(.horizontal, AppSpacing.lg)
         }
+    }
+
+    @ViewBuilder
+    private var statusBlock: some View {
+        VStack(spacing: AppSpacing.sm) {
+            if isRecording {
+                liveWaveform
+                Text(timerLabel)
+                    .font(.system(size: 18, weight: .medium, design: .monospaced))
+                    .foregroundStyle(AppColors.textSecondary)
+                    .transition(.opacity)
+            } else {
+                Text(primaryLabel)
+                    .font(AppTypography.bodyMedium)
+                    .foregroundStyle(AppColors.textTertiary)
+                    .frame(minHeight: 36)
+                    .multilineTextAlignment(.center)
+                    .transition(.opacity)
+                Text("0:00")
+                    .font(.system(size: 18, weight: .medium, design: .monospaced))
+                    .foregroundStyle(AppColors.textTertiary)
+                    .transition(.opacity)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var liveWaveform: some View {
+        #if os(iOS)
+        LiveWaveformBars(levels: recorder.levels, color: AppColors.accent.opacity(0.65))
+            .frame(height: 36)
+            .transition(.opacity)
+        #else
+        Waveform(
+            barCount: 48, maxHeight: 36,
+            color: AppColors.accent.opacity(0.65), seed: 0.4, animated: true
+        )
+        .frame(height: 36)
+        .transition(.opacity)
+        #endif
+    }
+
+    private var timerLabel: String {
+        #if os(iOS)
+        return recorder.elapsedLabel
+        #else
+        return "0:00"
+        #endif
     }
 
     // MARK: - Tips card

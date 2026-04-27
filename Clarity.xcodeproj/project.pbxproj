@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		1AEC353F2F9FCE640005489B /* ArgmaxOSS in Frameworks */ = {isa = PBXBuildFile; productRef = 1AEC353E2F9FCE640005489B /* ArgmaxOSS */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		1AEC34D72F9FC2400005489B /* Clarity.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Clarity.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -23,6 +27,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				1AEC353F2F9FCE640005489B /* ArgmaxOSS in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -65,6 +70,7 @@
 			);
 			name = Clarity;
 			packageProductDependencies = (
+				1AEC353E2F9FCE640005489B /* ArgmaxOSS */,
 			);
 			productName = Clarity;
 			productReference = 1AEC34D72F9FC2400005489B /* Clarity.app */;
@@ -94,6 +100,9 @@
 			);
 			mainGroup = 1AEC34CE2F9FC2400005489B;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				1AEC353D2F9FCE640005489B /* XCRemoteSwiftPackageReference "WhisperKit" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 1AEC34D82F9FC2400005489B /* Products */;
 			projectDirPath = "";
@@ -254,6 +263,7 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Clarity uses your microphone to capture your brain dump and turn it into a day plan.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -298,6 +308,7 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Clarity uses your microphone to capture your brain dump and turn it into a day plan.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -351,6 +362,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		1AEC353D2F9FCE640005489B /* XCRemoteSwiftPackageReference "WhisperKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/argmaxinc/WhisperKit";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		1AEC353E2F9FCE640005489B /* ArgmaxOSS */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 1AEC353D2F9FCE640005489B /* XCRemoteSwiftPackageReference "WhisperKit" */;
+			productName = ArgmaxOSS;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 1AEC34CF2F9FC2400005489B /* Project object */;
 }
