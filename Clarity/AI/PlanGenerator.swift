@@ -35,9 +35,11 @@ final class PlanGenerator {
 
     /// Drives the BuildingPlanView. Animates the stage list while the API call
     /// runs in parallel; the final result lands once both finish.
-    /// If `existing` is non-empty, the AI is asked to MERGE the user's new
-    /// thoughts with the existing plan rather than replan from scratch.
-    func generate(from transcript: String, existing: [PlanTask] = []) async {
+    /// - Parameters:
+    ///   - quick: when true, skips the 5-stage animation and resolves as soon
+    ///     as OpenAI responds. Used by Quick Add where the user just wants
+    ///     their task added with no theatrics.
+    func generate(from transcript: String, existing: [PlanTask] = [], quick: Bool = false) async {
         // Reset
         stage = .extracting
         isComplete = false
@@ -60,15 +62,22 @@ final class PlanGenerator {
 
         let userMessage = buildUserMessage(transcript: trimmed, existing: existing)
 
-        // Run animation + API in parallel.
-        async let apiResult = callOpenAI(userMessage: userMessage, apiKey: apiKey)
+        if quick {
+            applyResult(await callOpenAI(userMessage: userMessage, apiKey: apiKey))
+            return
+        }
 
+        // Run stage animation + API in parallel.
+        async let apiResult = callOpenAI(userMessage: userMessage, apiKey: apiKey)
         for next in Stage.allCases {
             stage = next
             try? await Task.sleep(for: .milliseconds(700))
         }
+        applyResult(await apiResult)
+    }
 
-        switch await apiResult {
+    private func applyResult(_ result: Result<[PlanTask], Error>) {
+        switch result {
         case .success(let generated):
             tasks = generated
         case .failure(let err):

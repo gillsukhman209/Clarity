@@ -90,9 +90,13 @@ struct SidebarView: View {
                 Text(cloudStatus.state.label)
                     .font(AppTypography.captionSemibold)
                     .foregroundStyle(AppColors.textPrimary)
-                Text(cloudStatus.state.detail)
-                    .font(AppTypography.caption)
-                    .foregroundStyle(AppColors.textTertiary)
+                // Re-render the relative time every minute so "5 min ago"
+                // becomes "6 min ago" without forcing the user to do anything.
+                TimelineView(.periodic(from: .now, by: 60)) { _ in
+                    Text(cloudStatus.detailLabel)
+                        .font(AppTypography.caption)
+                        .foregroundStyle(AppColors.textTertiary)
+                }
             }
             Spacer()
         }

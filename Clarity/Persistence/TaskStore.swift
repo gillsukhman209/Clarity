@@ -16,7 +16,7 @@ import CoreData
 final class TaskStore {
     private let context: ModelContext
     var notifications: NotificationsManager?
-    private var remoteChangeTask: Task<Void, Never>?
+    @ObservationIgnored private var remoteChangeTask: Task<Void, Never>?
 
     private(set) var tasks: [PlanTask] = []
     private(set) var daySections: [DaySection] = []
@@ -26,10 +26,6 @@ final class TaskStore {
         self.notifications = notifications
         refresh()
         startObservingRemoteChanges()
-    }
-
-    deinit {
-        remoteChangeTask?.cancel()
     }
 
     /// Public refresh used by ContentView when the app becomes active —

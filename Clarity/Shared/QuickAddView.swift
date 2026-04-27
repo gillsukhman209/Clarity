@@ -155,7 +155,7 @@ struct QuickAddView: View {
 
         isProcessing = true
         errorMessage = nil
-        await generator.generate(from: trimmed, existing: store.tasks)
+        await generator.generate(from: trimmed, existing: store.tasks, quick: true)
 
         if let err = generator.error {
             errorMessage = err

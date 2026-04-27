@@ -183,73 +183,68 @@ struct DashboardView: View {
 
     // MARK: - Task list
     private var taskList: some View {
-        List {
-            ForEach(store.daySections) { section in
-                Section {
-                    ForEach(section.tasks) { task in
-                        taskRow(task)
-                            .listRowSeparator(.hidden)
-                            .listRowBackground(Color.clear)
-                            .listRowInsets(EdgeInsets(top: 2, leading: AppSpacing.xl, bottom: 2, trailing: AppSpacing.xl))
-                            .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                                Button {
-                                    store.toggleComplete(task.id)
-                                } label: {
-                                    Label(task.isCompleted ? "Undo" : "Complete",
-                                          systemImage: task.isCompleted ? "arrow.uturn.backward" : "checkmark")
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: AppSpacing.xl) {
+                ForEach(store.daySections) { section in
+                    VStack(alignment: .leading, spacing: AppSpacing.sm) {
+                        DaySectionHeader(section: section)
+
+                        VStack(spacing: AppSpacing.xs) {
+                            ForEach(section.tasks) { task in
+                                SwipeableRow(
+                                    onTap: { selectedTaskID = task.id },
+                                    leadingAction: SwipeAction(
+                                        symbol: task.isCompleted ? "arrow.uturn.backward" : "checkmark",
+                                        title: task.isCompleted ? "Undo" : "Done",
+                                        color: AppColors.Priority.lowInk,
+                                        action: { store.toggleComplete(task.id) }
+                                    ),
+                                    trailingAction: SwipeAction(
+                                        symbol: "trash",
+                                        title: "Delete",
+                                        color: AppColors.Priority.highInk,
+                                        isDestructive: true,
+                                        action: {
+                                            if selectedTaskID == task.id { selectedTaskID = nil }
+                                            store.delete(task.id)
+                                        }
+                                    )
+                                ) {
+                                    taskRow(task)
+                                        .background(AppColors.background)
                                 }
-                                .tint(AppColors.Priority.lowInk)
+                                .contextMenu {
+                                    Button {
+                                        store.toggleComplete(task.id)
+                                    } label: {
+                                        Label(task.isCompleted ? "Mark incomplete" : "Mark complete",
+                                              systemImage: task.isCompleted ? "arrow.uturn.backward" : "checkmark.circle")
+                                    }
+                                    Divider()
+                                    Button(role: .destructive) {
+                                        if selectedTaskID == task.id { selectedTaskID = nil }
+                                        store.delete(task.id)
+                                    } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
+                                }
                             }
-                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                Button(role: .destructive) {
-                                    if selectedTaskID == task.id { selectedTaskID = nil }
-                                    store.delete(task.id)
-                                } label: {
-                                    Label("Delete", systemImage: "trash")
-                                }
-                            }
-                            .contextMenu {
-                                Button {
-                                    store.toggleComplete(task.id)
-                                } label: {
-                                    Label(task.isCompleted ? "Mark incomplete" : "Mark complete",
-                                          systemImage: task.isCompleted ? "arrow.uturn.backward" : "checkmark.circle")
-                                }
-                                Divider()
-                                Button(role: .destructive) {
-                                    if selectedTaskID == task.id { selectedTaskID = nil }
-                                    store.delete(task.id)
-                                } label: {
-                                    Label("Delete", systemImage: "trash")
-                                }
-                            }
+                        }
                     }
-                } header: {
-                    DaySectionHeader(section: section)
-                        .padding(.horizontal, AppSpacing.xl)
-                        .padding(.top, AppSpacing.md)
-                        .padding(.bottom, 4)
-                        .listRowInsets(EdgeInsets())
                 }
             }
+            .padding(.horizontal, AppSpacing.xl)
+            .padding(.bottom, AppSpacing.xl)
         }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
-        .padding(.bottom, AppSpacing.xl)
     }
 
     private func taskRow(_ task: PlanTask) -> some View {
-        HoverScaleButton(
-            action: { selectedTaskID = task.id },
-            hoverScale: 1.005
-        ) {
-            HStack(spacing: AppSpacing.sm) {
-                Text(task.startTimeLabel)
-                    .font(AppTypography.captionMedium)
-                    .foregroundStyle(AppColors.textTertiary)
-                    .frame(width: 72, alignment: .leading)
-                TaskBlock(task: task, isSelected: task.id == selectedTaskID)
-            }
+        HStack(spacing: AppSpacing.sm) {
+            Text(task.startTimeLabel)
+                .font(AppTypography.captionMedium)
+                .foregroundStyle(AppColors.textTertiary)
+                .frame(width: 72, alignment: .leading)
+            TaskBlock(task: task, isSelected: task.id == selectedTaskID)
         }
     }
 }

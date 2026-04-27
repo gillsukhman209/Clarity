@@ -98,27 +98,27 @@ struct DayPlanView: View {
 
     // MARK: - Task list
     private var taskList: some View {
-        List {
-            ForEach(Array(store.tasks.enumerated()), id: \.element.id) { index, task in
-                row(for: task, previous: index > 0 ? store.tasks[index - 1] : nil)
-                    .listRowSeparator(.hidden)
-                    .listRowBackground(Color.clear)
-                    .listRowInsets(EdgeInsets(top: 2, leading: AppSpacing.md, bottom: 2, trailing: AppSpacing.md))
-                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                        Button {
-                            store.toggleComplete(task.id)
-                        } label: {
-                            Label(task.isCompleted ? "Undo" : "Complete",
-                                  systemImage: task.isCompleted ? "arrow.uturn.backward" : "checkmark")
-                        }
-                        .tint(AppColors.Priority.lowInk)
-                    }
-                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                        Button(role: .destructive) {
-                            store.delete(task.id)
-                        } label: {
-                            Label("Delete", systemImage: "trash")
-                        }
+        ScrollView {
+            LazyVStack(spacing: AppSpacing.xs) {
+                ForEach(Array(store.tasks.enumerated()), id: \.element.id) { index, task in
+                    SwipeableRow(
+                        onTap: { presentedTask = SelectedTask(id: task.id) },
+                        leadingAction: SwipeAction(
+                            symbol: task.isCompleted ? "arrow.uturn.backward" : "checkmark",
+                            title: task.isCompleted ? "Undo" : "Done",
+                            color: AppColors.Priority.lowInk,
+                            action: { store.toggleComplete(task.id) }
+                        ),
+                        trailingAction: SwipeAction(
+                            symbol: "trash",
+                            title: "Delete",
+                            color: AppColors.Priority.highInk,
+                            isDestructive: true,
+                            action: { store.delete(task.id) }
+                        )
+                    ) {
+                        row(for: task, previous: index > 0 ? store.tasks[index - 1] : nil)
+                            .background(AppColors.background)
                     }
                     .contextMenu {
                         Button {
@@ -133,11 +133,12 @@ struct DayPlanView: View {
                             Label("Delete", systemImage: "trash")
                         }
                     }
+                }
             }
+            .padding(.horizontal, AppSpacing.md)
+            .padding(.top, AppSpacing.md)
+            .padding(.bottom, 140)
         }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
-        .padding(.bottom, 120)
     }
 
     @ViewBuilder
@@ -153,12 +154,7 @@ struct DayPlanView: View {
             }
             .frame(width: 48, alignment: .leading)
 
-            Button {
-                presentedTask = SelectedTask(id: task.id)
-            } label: {
-                TaskBlock(task: task)
-            }
-            .buttonStyle(.plain)
+            TaskBlock(task: task)
         }
     }
 
