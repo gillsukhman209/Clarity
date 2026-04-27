@@ -8,9 +8,11 @@ import SwiftData
 
 struct ContentView: View {
     @Environment(\.modelContext) private var context
+    @Environment(\.scenePhase) private var scenePhase
     @State private var store: TaskStore?
     @State private var transcription = TranscriptionService()
     @State private var cloudStatus = CloudSyncStatus()
+    @State private var notifications = NotificationsManager()
     @State private var showReadyBanner: Bool = false
 
     var body: some View {
@@ -31,11 +33,19 @@ struct ContentView: View {
         .preferredColorScheme(.light)
         .task {
             if store == nil {
-                store = TaskStore(context: context)
+                store = TaskStore(context: context, notifications: notifications)
             }
             async let prep: Void = transcription.prepareIfNeeded()
             async let cloud: Void = cloudStatus.refresh()
-            _ = await (prep, cloud)
+            async let notif: Void = notifications.requestAuthorization()
+            _ = await (prep, cloud, notif)
+            store?.kickNotifications()
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .active {
+                store?.reload()
+                Task { await cloudStatus.refresh() }
+            }
         }
         .onChange(of: transcription.pendingReadyAnnouncement) { _, pending in
             guard pending else { return }

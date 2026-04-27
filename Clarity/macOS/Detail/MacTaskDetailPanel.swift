@@ -58,8 +58,11 @@ struct MacTaskDetailPanel: View {
 
             Divider().background(AppColors.divider)
 
-            completeButton(task)
-                .padding(AppSpacing.lg)
+            VStack(spacing: AppSpacing.sm) {
+                completeButton(task)
+                deleteButton(task)
+            }
+            .padding(AppSpacing.lg)
         }
     }
 
@@ -169,6 +172,28 @@ struct MacTaskDetailPanel: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
             .background(Capsule(style: .continuous).fill(AppColors.accent))
+        }
+    }
+
+    // MARK: - Delete
+    private func deleteButton(_ task: PlanTask) -> some View {
+        HoverScaleButton(action: {
+            store.delete(task.id)
+            onComplete()
+        }, hoverScale: 1.02) {
+            HStack(spacing: 8) {
+                Image(systemName: "trash")
+                    .font(.system(size: 13, weight: .semibold))
+                Text("Delete Task")
+                    .font(AppTypography.bodySemibold)
+            }
+            .foregroundStyle(AppColors.Priority.highInk)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background(
+                Capsule(style: .continuous)
+                    .stroke(AppColors.Priority.highInk.opacity(0.4), lineWidth: 1)
+            )
         }
     }
 }

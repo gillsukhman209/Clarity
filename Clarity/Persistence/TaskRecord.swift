@@ -22,7 +22,7 @@ final class TaskRecord {
     var notes: String? = nil
     var isCompleted: Bool = false
 
-    @Relationship(deleteRule: .cascade)
+    @Relationship(deleteRule: .cascade, inverse: \SubtaskRecord.task)
     var subtasks: [SubtaskRecord]? = []
 
     init(

@@ -29,16 +29,7 @@ struct DayPlanView: View {
                 if store.tasks.isEmpty {
                     emptyState
                 } else {
-                    ScrollView {
-                        VStack(spacing: AppSpacing.xs) {
-                            ForEach(Array(store.tasks.enumerated()), id: \.element.id) { index, task in
-                                row(for: task, previous: index > 0 ? store.tasks[index - 1] : nil)
-                            }
-                        }
-                        .padding(.horizontal, AppSpacing.md)
-                        .padding(.top, AppSpacing.md)
-                        .padding(.bottom, 120)
-                    }
+                    taskList
                 }
             }
             .background(AppColors.background)
@@ -105,7 +96,50 @@ struct DayPlanView: View {
         .padding(.vertical, AppSpacing.sm)
     }
 
-    // MARK: - Row
+    // MARK: - Task list
+    private var taskList: some View {
+        List {
+            ForEach(Array(store.tasks.enumerated()), id: \.element.id) { index, task in
+                row(for: task, previous: index > 0 ? store.tasks[index - 1] : nil)
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets(top: 2, leading: AppSpacing.md, bottom: 2, trailing: AppSpacing.md))
+                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                        Button {
+                            store.toggleComplete(task.id)
+                        } label: {
+                            Label(task.isCompleted ? "Undo" : "Complete",
+                                  systemImage: task.isCompleted ? "arrow.uturn.backward" : "checkmark")
+                        }
+                        .tint(AppColors.Priority.lowInk)
+                    }
+                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                        Button(role: .destructive) {
+                            store.delete(task.id)
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    }
+                    .contextMenu {
+                        Button {
+                            store.toggleComplete(task.id)
+                        } label: {
+                            Label(task.isCompleted ? "Mark incomplete" : "Mark complete",
+                                  systemImage: task.isCompleted ? "arrow.uturn.backward" : "checkmark.circle")
+                        }
+                        Button(role: .destructive) {
+                            store.delete(task.id)
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    }
+            }
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .padding(.bottom, 120)
+    }
+
     @ViewBuilder
     private func row(for task: PlanTask, previous: PlanTask?) -> some View {
         let showHour = previous.map { hour(of: $0.startTime) != hour(of: task.startTime) } ?? true

@@ -10,17 +10,47 @@
 import Foundation
 import SwiftData
 import Observation
+import CoreData
 
 @Observable
 final class TaskStore {
     private let context: ModelContext
+    var notifications: NotificationsManager?
+    private var remoteChangeTask: Task<Void, Never>?
 
     private(set) var tasks: [PlanTask] = []
     private(set) var daySections: [DaySection] = []
 
-    init(context: ModelContext) {
+    init(context: ModelContext, notifications: NotificationsManager? = nil) {
         self.context = context
+        self.notifications = notifications
         refresh()
+        startObservingRemoteChanges()
+    }
+
+    deinit {
+        remoteChangeTask?.cancel()
+    }
+
+    /// Public refresh used by ContentView when the app becomes active —
+    /// belt-and-suspenders so foreground always re-pulls from CloudKit.
+    func reload() {
+        refresh()
+    }
+
+    /// Listens for `NSPersistentStoreRemoteChange`, which the
+    /// NSPersistentCloudKitContainer underneath SwiftData fires whenever
+    /// CloudKit pushes records from another device.
+    private func startObservingRemoteChanges() {
+        remoteChangeTask = Task { [weak self] in
+            let stream = NotificationCenter.default.notifications(
+                named: .NSPersistentStoreRemoteChange
+            )
+            for await _ in stream {
+                guard !Task.isCancelled else { break }
+                await MainActor.run { self?.refresh() }
+            }
+        }
     }
 
     // MARK: - Reads
@@ -30,6 +60,12 @@ final class TaskStore {
     }
 
     var firstTaskID: UUID? { tasks.first?.id }
+
+    /// Re-runs notification scheduling against the current task list.
+    /// Used after notification permission becomes known on launch.
+    func kickNotifications() {
+        notifications?.sync(with: tasks)
+    }
 
     // MARK: - Mutations
 
@@ -106,6 +142,8 @@ final class TaskStore {
             guard let bucket = grouped[kind], !bucket.isEmpty else { return nil }
             return DaySection(kind: kind, tasks: bucket)
         }
+
+        notifications?.sync(with: tasks)
     }
 
     // MARK: - Bulk replace (used by AI plan generator)

@@ -14,6 +14,9 @@ final class SubtaskRecord {
     var title: String = ""
     var isCompleted: Bool = false
     var sortIndex: Int = 0
+    /// Back-reference to the owning task. Required by CloudKit, which needs
+    /// every relationship to have an inverse.
+    var task: TaskRecord? = nil
 
     init(
         id: UUID = UUID(),

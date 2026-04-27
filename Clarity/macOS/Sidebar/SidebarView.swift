@@ -2,42 +2,15 @@
 //  SidebarView.swift
 //  Clarity
 //
-//  Phase 4 — macOS sidebar (nav + smart lists + sync status).
+//  Phase 4 — macOS sidebar.
+//  Stripped to "Today" + sync footer + Settings gear.
+//  Smart Lists / History / Timeline / Insights nav return as we build them.
 //
 
 #if os(macOS)
 import SwiftUI
 
 struct SidebarView: View {
-    private struct NavItem: Identifiable, Hashable {
-        let id = UUID()
-        let title: String
-        let symbol: String
-    }
-
-    private struct SmartList: Identifiable, Hashable {
-        let id = UUID()
-        let title: String
-        let dotColor: Color
-    }
-
-    private let navItems: [NavItem] = [
-        NavItem(title: "Today",    symbol: "calendar.day.timeline.left"),
-        NavItem(title: "Plan",     symbol: "list.bullet.rectangle"),
-        NavItem(title: "Timeline", symbol: "clock"),
-        NavItem(title: "History",  symbol: "clock.arrow.circlepath"),
-        NavItem(title: "Insights", symbol: "chart.line.uptrend.xyaxis")
-    ]
-
-    private let smartLists: [SmartList] = [
-        SmartList(title: "Work",     dotColor: AppColors.Category.workInk),
-        SmartList(title: "Personal", dotColor: AppColors.Category.personalInk),
-        SmartList(title: "Health",   dotColor: AppColors.Category.healthInk),
-        SmartList(title: "Admin",    dotColor: AppColors.Category.adminInk)
-    ]
-
-    @State private var selected: String = "Today"
-    @State private var hoveredItem: String?
     @State private var showSettings: Bool = false
     @Environment(CloudSyncStatus.self) private var cloudStatus
     @Environment(TaskStore.self) private var store
@@ -49,29 +22,13 @@ struct SidebarView: View {
                 .padding(.top, AppSpacing.lg)
                 .padding(.bottom, AppSpacing.md)
 
-            ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: AppSpacing.xs) {
-                    ForEach(navItems) { item in
-                        navRow(item)
-                    }
-
-                    Spacer().frame(height: AppSpacing.lg)
-
-                    Text("SMART LISTS")
-                        .font(AppTypography.captionSemibold)
-                        .tracking(0.6)
-                        .foregroundStyle(AppColors.textTertiary)
-                        .padding(.horizontal, 10)
-                        .padding(.bottom, 2)
-
-                    ForEach(smartLists) { list in
-                        smartRow(list)
-                    }
-                }
-                .padding(.horizontal, AppSpacing.sm)
+            VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                todayRow
             }
+            .padding(.horizontal, AppSpacing.sm)
 
             Spacer(minLength: 0)
+
             HStack(alignment: .center, spacing: 8) {
                 syncFooter
                 settingsButton
@@ -84,19 +41,6 @@ struct SidebarView: View {
             SettingsView()
                 .environment(store)
         }
-    }
-
-    private var settingsButton: some View {
-        HoverScaleButton(action: { showSettings = true }, hoverScale: 1.06) {
-            Image(systemName: "gearshape")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(AppColors.textSecondary)
-                .frame(width: 26, height: 26)
-                .background(
-                    Circle().fill(AppColors.surface.opacity(0.0001))
-                )
-        }
-        .accessibilityLabel("Settings")
     }
 
     // MARK: - Brand
@@ -117,67 +61,23 @@ struct SidebarView: View {
         }
     }
 
-    // MARK: - Rows
-    private func navRow(_ item: NavItem) -> some View {
-        let isSelected = item.title == selected
-        let isHovered  = hoveredItem == item.title
-
-        return Button {
-            selected = item.title
-        } label: {
-            HStack(spacing: 10) {
-                Image(systemName: item.symbol)
-                    .font(.system(size: 13, weight: .semibold))
-                    .frame(width: 18)
-                Text(item.title)
-                    .font(AppTypography.bodyMedium)
-                Spacer()
-            }
-            .foregroundStyle(isSelected ? AppColors.textPrimary : AppColors.textSecondary)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
-            .background(
-                RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
-                    .fill(rowBackground(selected: isSelected, hovered: isHovered))
-            )
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering in
-            hoveredItem = hovering ? item.title : (hoveredItem == item.title ? nil : hoveredItem)
-        }
-        .animation(.easeOut(duration: 0.12), value: isHovered)
-    }
-
-    private func rowBackground(selected: Bool, hovered: Bool) -> Color {
-        if selected { return AppColors.surface }
-        if hovered  { return AppColors.surface.opacity(0.5) }
-        return .clear
-    }
-
-    private func smartRow(_ list: SmartList) -> some View {
-        let isHovered = hoveredItem == "smart-\(list.title)"
-        return HStack(spacing: 10) {
-            Circle()
-                .fill(list.dotColor)
-                .frame(width: 8, height: 8)
-                .padding(.leading, 4)
-            Text(list.title)
+    // MARK: - Today row (the only nav item for now)
+    private var todayRow: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "calendar.day.timeline.left")
+                .font(.system(size: 13, weight: .semibold))
+                .frame(width: 18)
+            Text("Today")
                 .font(AppTypography.bodyMedium)
-                .foregroundStyle(AppColors.textSecondary)
             Spacer()
         }
+        .foregroundStyle(AppColors.textPrimary)
         .padding(.horizontal, 10)
-        .padding(.vertical, 6)
+        .padding(.vertical, 7)
         .background(
             RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
-                .fill(isHovered ? AppColors.surface.opacity(0.5) : Color.clear)
+                .fill(AppColors.surface)
         )
-        .onHover { hovering in
-            let key = "smart-\(list.title)"
-            hoveredItem = hovering ? key : (hoveredItem == key ? nil : hoveredItem)
-        }
-        .animation(.easeOut(duration: 0.12), value: isHovered)
     }
 
     // MARK: - Sync footer
@@ -200,11 +100,27 @@ struct SidebarView: View {
 
     private var syncDotColor: Color {
         switch cloudStatus.state {
-        case .available:                       return AppColors.Priority.lowInk
-        case .checking:                        return AppColors.textTertiary
+        case .available:
+            return AppColors.Priority.lowInk
+        case .checking:
+            return AppColors.textTertiary
         case .signedOut, .restricted, .unavailable:
             return AppColors.Priority.mediumInk
         }
+    }
+
+    // MARK: - Settings gear
+    private var settingsButton: some View {
+        HoverScaleButton(action: { showSettings = true }, hoverScale: 1.08) {
+            Image(systemName: "gearshape")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(AppColors.textSecondary)
+                .frame(width: 26, height: 26)
+                .background(
+                    Circle().fill(AppColors.surface.opacity(0.0001))
+                )
+        }
+        .accessibilityLabel("Settings")
     }
 }
 #endif

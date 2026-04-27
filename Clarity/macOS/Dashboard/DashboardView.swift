@@ -30,15 +30,7 @@ struct DashboardView: View {
             if store.daySections.isEmpty {
                 emptyState
             } else {
-                ScrollView(showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: AppSpacing.xl) {
-                        ForEach(store.daySections) { section in
-                            sectionView(section)
-                        }
-                    }
-                    .padding(.horizontal, AppSpacing.xl)
-                    .padding(.bottom, AppSpacing.xl)
-                }
+                taskList
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -189,30 +181,76 @@ struct DashboardView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    // MARK: - Section
-    @ViewBuilder
-    private func sectionView(_ section: DaySection) -> some View {
-        VStack(alignment: .leading, spacing: AppSpacing.sm) {
-            DaySectionHeader(section: section)
-
-            VStack(spacing: AppSpacing.xs) {
-                ForEach(section.tasks) { task in
-                    HoverScaleButton(
-                        action: { selectedTaskID = task.id },
-                        hoverScale: 1.005
-                    ) {
-                        HStack(spacing: AppSpacing.sm) {
-                            Text(task.startTimeLabel)
-                                .font(AppTypography.captionMedium)
-                                .foregroundStyle(AppColors.textTertiary)
-                                .frame(width: 72, alignment: .leading)
-                            TaskBlock(task: task, isSelected: task.id == selectedTaskID)
-                        }
+    // MARK: - Task list
+    private var taskList: some View {
+        List {
+            ForEach(store.daySections) { section in
+                Section {
+                    ForEach(section.tasks) { task in
+                        taskRow(task)
+                            .listRowSeparator(.hidden)
+                            .listRowBackground(Color.clear)
+                            .listRowInsets(EdgeInsets(top: 2, leading: AppSpacing.xl, bottom: 2, trailing: AppSpacing.xl))
+                            .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                                Button {
+                                    store.toggleComplete(task.id)
+                                } label: {
+                                    Label(task.isCompleted ? "Undo" : "Complete",
+                                          systemImage: task.isCompleted ? "arrow.uturn.backward" : "checkmark")
+                                }
+                                .tint(AppColors.Priority.lowInk)
+                            }
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                Button(role: .destructive) {
+                                    if selectedTaskID == task.id { selectedTaskID = nil }
+                                    store.delete(task.id)
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                            }
+                            .contextMenu {
+                                Button {
+                                    store.toggleComplete(task.id)
+                                } label: {
+                                    Label(task.isCompleted ? "Mark incomplete" : "Mark complete",
+                                          systemImage: task.isCompleted ? "arrow.uturn.backward" : "checkmark.circle")
+                                }
+                                Divider()
+                                Button(role: .destructive) {
+                                    if selectedTaskID == task.id { selectedTaskID = nil }
+                                    store.delete(task.id)
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                            }
                     }
+                } header: {
+                    DaySectionHeader(section: section)
+                        .padding(.horizontal, AppSpacing.xl)
+                        .padding(.top, AppSpacing.md)
+                        .padding(.bottom, 4)
+                        .listRowInsets(EdgeInsets())
                 }
             }
         }
-        .animation(.easeInOut(duration: 0.2), value: section.tasks.map(\.isCompleted))
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .padding(.bottom, AppSpacing.xl)
+    }
+
+    private func taskRow(_ task: PlanTask) -> some View {
+        HoverScaleButton(
+            action: { selectedTaskID = task.id },
+            hoverScale: 1.005
+        ) {
+            HStack(spacing: AppSpacing.sm) {
+                Text(task.startTimeLabel)
+                    .font(AppTypography.captionMedium)
+                    .foregroundStyle(AppColors.textTertiary)
+                    .frame(width: 72, alignment: .leading)
+                TaskBlock(task: task, isSelected: task.id == selectedTaskID)
+            }
+        }
     }
 }
 #endif
