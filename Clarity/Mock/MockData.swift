@@ -10,6 +10,10 @@ import Foundation
 enum MockData {
     static let userFirstName = "Alex"
 
+    static let sampleTranscript: String = """
+    I need to finish the marketing strategy presentation, reply to emails, call Mom, workout, grocery shopping, plan content for next week, and read that book… oh and book a dentist appointment.
+    """
+
     static var today: Date {
         let cal = Calendar.current
         return cal.startOfDay(for: Date())
