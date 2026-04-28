@@ -122,7 +122,8 @@ final class PlanGenerator {
                 ? ""
                 : " — subtasks: \(task.subtasks.map(\.title).joined(separator: "; "))"
             let day = Self.dayLabel(for: task.startTime)
-            return "- [\(day)] \(task.startTimeLabel) \(task.title) (\(task.durationMinutes)m, category=\(task.category.rawValue), priority=\(task.priority.rawValue), section=\(task.section.rawValue))\(subs)"
+            let when = task.hasTime ? task.startTimeLabel : "Anytime"
+            return "- [\(day)] \(when) \(task.title) (\(task.durationMinutes)m, category=\(task.category.rawValue), priority=\(task.priority.rawValue), section=\(task.section.rawValue), hasTime=\(task.hasTime))\(subs)"
         }
         let summary = lines.joined(separator: "\n")
 
@@ -235,7 +236,9 @@ final class PlanGenerator {
     - title: short, action-oriented, faithful to what the user said
     - category, priority, section: see allowed values
     - dayOffset: integer, see above
-    - startHour, startMinute, durationMinutes: realistic numbers (estimate duration if not given; default 30 min)
+    - hasTime: TRUE if the user explicitly mentioned a time ("at 3pm", "tonight"). FALSE if they didn't — do NOT invent a time. Tasks with hasTime=false render at the bottom with no time label.
+    - startHour, startMinute: only meaningful when hasTime is true. Set both to 0 when hasTime is false.
+    - durationMinutes: realistic numbers (estimate duration if not given; default 30 min)
     - notes: 1 sentence on how to approach it (or empty string if obvious)
     - subtasks: empty array unless the user explicitly described multiple steps
 
@@ -287,7 +290,9 @@ final class PlanGenerator {
     - title: short, action-oriented, faithful to what the user said
     - category, priority, section: see allowed values
     - dayOffset: integer, see above
-    - startHour, startMinute, durationMinutes: realistic numbers (estimate duration if not given)
+    - hasTime: TRUE if the user explicitly mentioned a specific time ("at 3pm", "tonight", "first thing in the morning"). FALSE if they didn't — do NOT invent a time. Tasks with hasTime=false render at the bottom of the day with no time label.
+    - startHour, startMinute: only meaningful when hasTime is true. When hasTime is false, set both to 0 (they're ignored).
+    - durationMinutes: realistic numbers (estimate duration if not given)
     - notes: 1–2 sentences on how to approach it
     - subtasks: 1–4 short actionable steps ONLY for tasks that benefit from breakdown (deep focus / creative work). Empty array for everything else.
 
@@ -341,7 +346,7 @@ private struct JSONSchemaWrapper: Encodable {
 /// Minimal JSON-Schema encoder tailored to the shape we need.
 private struct JSONSchema: Encodable {
     enum SchemaType: String, Encodable {
-        case object, array, string, integer
+        case object, array, string, integer, boolean
     }
 
     let type: SchemaType
@@ -381,13 +386,14 @@ private struct JSONSchema: Encodable {
                 "priority":        JSONSchema(type: .string, enum: priorityEnum),
                 "section":         JSONSchema(type: .string, enum: sectionEnum),
                 "dayOffset":       JSONSchema(type: .integer, minimum: 0, maximum: 90),
+                "hasTime":         JSONSchema(type: .boolean),
                 "startHour":       JSONSchema(type: .integer, minimum: 0, maximum: 23),
                 "startMinute":     JSONSchema(type: .integer, minimum: 0, maximum: 59),
                 "durationMinutes": JSONSchema(type: .integer, minimum: 5, maximum: 480),
                 "notes":           JSONSchema(type: .string),
                 "subtasks":        JSONSchema(type: .array, items: SchemaBox(JSONSchema(type: .string)))
             ],
-            required: ["title", "category", "priority", "section", "dayOffset", "startHour", "startMinute", "durationMinutes", "notes", "subtasks"],
+            required: ["title", "category", "priority", "section", "dayOffset", "hasTime", "startHour", "startMinute", "durationMinutes", "notes", "subtasks"],
             additionalProperties: false
         )
 
@@ -417,6 +423,7 @@ private struct DayPlanJSON: Decodable {
         let priority: String
         let section: String
         let dayOffset: Int
+        let hasTime: Bool
         let startHour: Int
         let startMinute: Int
         let durationMinutes: Int
@@ -437,9 +444,10 @@ private struct DayPlanJSON: Decodable {
                 value: max(0, min(90, t.dayOffset)),
                 to: today
             ) ?? today
+            // For timeless tasks, anchor to start of day so date filters still work.
             let startTime = cal.date(
-                bySettingHour: max(0, min(23, t.startHour)),
-                minute: max(0, min(59, t.startMinute)),
+                bySettingHour: t.hasTime ? max(0, min(23, t.startHour)) : 0,
+                minute: t.hasTime ? max(0, min(59, t.startMinute)) : 0,
                 second: 0,
                 of: day
             ) ?? day
@@ -449,12 +457,16 @@ private struct DayPlanJSON: Decodable {
                 priority: priority,
                 section: section,
                 startTime: startTime,
+                hasTime: t.hasTime,
                 durationMinutes: max(5, t.durationMinutes),
                 notes: t.notes.isEmpty ? nil : t.notes,
                 subtasks: t.subtasks.map { Subtask(title: $0) }
             )
         }
-        .sorted { $0.startTime < $1.startTime }
+        .sorted { a, b in
+            if a.hasTime != b.hasTime { return a.hasTime }
+            return a.startTime < b.startTime
+        }
     }
 }
 

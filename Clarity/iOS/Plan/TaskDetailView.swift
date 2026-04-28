@@ -112,7 +112,7 @@ struct TaskDetailView: View {
                 ))
                 Divider().background(AppColors.divider)
                 detailRow(label: "Start Time", value: AnyView(
-                    Text(task.startTimeLabel)
+                    Text(task.timeLabel ?? "Anytime")
                         .font(AppTypography.bodyMedium)
                         .foregroundStyle(AppColors.textPrimary)
                 ))

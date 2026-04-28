@@ -14,6 +14,9 @@ struct PlanTask: Identifiable, Hashable {
     var priority: TaskPriority
     var section: DaySectionKind
     var startTime: Date
+    /// `false` means the user didn't specify a time — the task floats and
+    /// renders without a time label.
+    var hasTime: Bool
     var durationMinutes: Int
     var notes: String?
     var subtasks: [Subtask]
@@ -26,6 +29,7 @@ struct PlanTask: Identifiable, Hashable {
         priority: TaskPriority = .medium,
         section: DaySectionKind,
         startTime: Date,
+        hasTime: Bool = true,
         durationMinutes: Int,
         notes: String? = nil,
         subtasks: [Subtask] = [],
@@ -37,6 +41,7 @@ struct PlanTask: Identifiable, Hashable {
         self.priority = priority
         self.section = section
         self.startTime = startTime
+        self.hasTime = hasTime
         self.durationMinutes = durationMinutes
         self.notes = notes
         self.subtasks = subtasks
@@ -62,6 +67,11 @@ struct PlanTask: Identifiable, Hashable {
         formatter.amSymbol = "AM"
         formatter.pmSymbol = "PM"
         return formatter.string(from: startTime)
+    }
+
+    /// `nil` for timeless tasks; otherwise the formatted "h:mm a" label.
+    var timeLabel: String? {
+        hasTime ? startTimeLabel : nil
     }
 
     var timeRangeLabel: String {

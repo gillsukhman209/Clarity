@@ -75,7 +75,7 @@ struct TaskBlock: View {
     /// current while the user is looking at the screen.
     @ViewBuilder
     private var countdown: some View {
-        if Calendar.current.isDateInToday(task.startTime), !task.isCompleted {
+        if task.hasTime, Calendar.current.isDateInToday(task.startTime), !task.isCompleted {
             TimelineView(.everyMinute) { context in
                 if let label = countdownLabel(now: context.date) {
                     Text(label)

@@ -239,7 +239,11 @@ struct DayPlanView: View {
 
     @ViewBuilder
     private func row(for task: PlanTask, previous: PlanTask?) -> some View {
-        let showHour = previous.map { hour(of: $0.startTime) != hour(of: task.startTime) } ?? true
+        let showHour: Bool = {
+            guard task.hasTime else { return false }
+            guard let prev = previous else { return true }
+            return !prev.hasTime || hour(of: prev.startTime) != hour(of: task.startTime)
+        }()
         HStack(alignment: .top, spacing: AppSpacing.sm) {
             VStack {
                 Text(showHour ? hourLabel(task.startTime) : "")

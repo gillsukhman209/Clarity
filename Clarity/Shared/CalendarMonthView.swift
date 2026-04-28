@@ -122,29 +122,22 @@ struct CalendarMonthView: View {
                     let counts = row.map { store.tasks(on: $0).count }
                     let maxTasks = counts.max() ?? 0
                     let widths = columnWidths(counts: counts, totalWidth: geo.size.width)
-                    HStack(spacing: 4) {
+                    HStack(alignment: .top, spacing: 4) {
                         ForEach(Array(row.enumerated()), id: \.element) { index, date in
                             cell(for: date, maxVisibleChips: chipBudget(for: maxTasks))
                                 .frame(width: widths[index])
+                                .frame(minHeight: minCellHeight)
                         }
                     }
-                    .frame(height: rowHeight(for: maxTasks))
                     .animation(.spring(response: 0.4, dampingFraction: 0.85),
                                value: row.map { store.tasks(on: $0).map(\.id) })
                 }
             }
         }
-        .frame(minHeight: gridMinHeight())
     }
 
-    private func gridMinHeight() -> CGFloat {
-        let rows = rowsToShow()
-        let total = rows.reduce(0.0) { running, row in
-            let maxTasks = row.map { store.tasks(on: $0).count }.max() ?? 0
-            return running + Double(rowHeight(for: maxTasks))
-        }
-        return total + Double(max(0, rows.count - 1)) * 4
-    }
+    /// Empty cells should still be visible — clamp to a small minimum.
+    private let minCellHeight: CGFloat = 40
 
     /// Distribute row width proportionally to per-cell weight.
     private func columnWidths(counts: [Int], totalWidth: CGFloat) -> [CGFloat] {
@@ -169,15 +162,6 @@ struct CalendarMonthView: View {
         case 2:  return 1.5
         case 3:  return 1.9
         default: return 2.3
-        }
-    }
-
-    private func rowHeight(for maxTasks: Int) -> CGFloat {
-        switch maxTasks {
-        case 0:  return 56
-        case 1:  return 88
-        case 2:  return 110
-        default: return 134
         }
     }
 

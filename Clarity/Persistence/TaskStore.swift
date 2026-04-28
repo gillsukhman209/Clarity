@@ -69,12 +69,16 @@ final class TaskStore {
 
     // MARK: - Date-filtered views
 
-    /// Tasks scheduled on the same calendar day as `date`, in start-time order.
+    /// Tasks scheduled on the same calendar day as `date`.
+    /// Timed tasks come first (sorted by time), timeless tasks last.
     func tasks(on date: Date) -> [PlanTask] {
         let cal = Calendar.current
         return tasks
             .filter { cal.isDate($0.startTime, inSameDayAs: date) }
-            .sorted { $0.startTime < $1.startTime }
+            .sorted { a, b in
+                if a.hasTime != b.hasTime { return a.hasTime }   // timed before timeless
+                return a.startTime < b.startTime
+            }
     }
 
     /// `daySections` filtered to the given date.
@@ -257,6 +261,7 @@ final class TaskStore {
             priority: plan.priority,
             section: plan.section,
             startTime: plan.startTime,
+            hasTime: plan.hasTime,
             durationMinutes: plan.durationMinutes,
             notes: plan.notes,
             isCompleted: plan.isCompleted,

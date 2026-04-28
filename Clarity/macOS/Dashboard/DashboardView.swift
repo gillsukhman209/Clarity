@@ -350,7 +350,7 @@ struct DashboardView: View {
 
     private func taskRow(_ task: PlanTask) -> some View {
         HStack(spacing: AppSpacing.sm) {
-            Text(task.startTimeLabel)
+            Text(task.timeLabel ?? "—")
                 .font(AppTypography.captionMedium)
                 .foregroundStyle(AppColors.textTertiary)
                 .frame(width: 72, alignment: .leading)

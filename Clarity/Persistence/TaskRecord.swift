@@ -18,6 +18,8 @@ final class TaskRecord {
     var priorityRaw: String = "medium"
     var sectionRaw: String = "getThingsDone"
     var startTime: Date = Date()
+    /// Default `true` keeps every existing record meaningful after the schema migration.
+    var hasTime: Bool = true
     var durationMinutes: Int = 30
     var notes: String? = nil
     var isCompleted: Bool = false
@@ -32,6 +34,7 @@ final class TaskRecord {
         priority: TaskPriority = .medium,
         section: DaySectionKind = .getThingsDone,
         startTime: Date = Date(),
+        hasTime: Bool = true,
         durationMinutes: Int = 30,
         notes: String? = nil,
         isCompleted: Bool = false,
@@ -43,6 +46,7 @@ final class TaskRecord {
         self.priorityRaw = priority.rawValue
         self.sectionRaw = section.rawValue
         self.startTime = startTime
+        self.hasTime = hasTime
         self.durationMinutes = durationMinutes
         self.notes = notes
         self.isCompleted = isCompleted
@@ -64,6 +68,7 @@ final class TaskRecord {
             priority: priority,
             section: section,
             startTime: startTime,
+            hasTime: hasTime,
             durationMinutes: durationMinutes,
             notes: notes,
             subtasks: subs,

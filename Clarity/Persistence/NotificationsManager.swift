@@ -50,21 +50,31 @@ final class NotificationsManager {
 
     /// Cancels all currently scheduled task notifications and reschedules from
     /// the given plan. Cheap enough to call after every store change.
+    ///
+    /// Lead time depends on priority so high-stakes work gets earlier warning:
+    /// - high   → fires 30 min before start
+    /// - medium → fires 15 min before start
+    /// - low    → fires 5 min before start
+    /// Timeless tasks (`!hasTime`) get no notification — there's nothing to ping at.
     func sync(with tasks: [PlanTask]) {
         let center = UNUserNotificationCenter.current()
         center.removeAllPendingNotificationRequests()
         guard authorization == .authorized else { return }
 
         let now = Date()
-        for task in tasks where !task.isCompleted && task.startTime > now {
+        for task in tasks where !task.isCompleted && task.hasTime {
+            let lead = leadMinutes(for: task.priority)
+            let fireDate = task.startTime.addingTimeInterval(-Double(lead) * 60)
+            guard fireDate > now else { continue }
+
             let content = UNMutableNotificationContent()
             content.title = task.title
-            content.body  = bodyText(for: task)
+            content.body  = bodyText(for: task, leadMinutes: lead)
             content.sound = .default
 
             let comps = Calendar.current.dateComponents(
                 [.year, .month, .day, .hour, .minute],
-                from: task.startTime
+                from: fireDate
             )
             let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)
             let request = UNNotificationRequest(
@@ -76,14 +86,25 @@ final class NotificationsManager {
         }
     }
 
-    private func bodyText(for task: PlanTask) -> String {
+    private func leadMinutes(for priority: TaskPriority) -> Int {
+        switch priority {
+        case .high:   return 30
+        case .medium: return 15
+        case .low:    return 5
+        }
+    }
+
+    private func bodyText(for task: PlanTask, leadMinutes lead: Int) -> String {
+        let when = lead == 0
+            ? "Starts now"
+            : "Starts in \(lead) min"
         let mins = task.durationMinutes
         if mins < 60 {
-            return "Starts now · \(mins) min · \(task.category.title)"
+            return "\(when) · \(mins) min · \(task.category.title)"
         }
         let h = mins / 60
         let m = mins % 60
         let duration = m == 0 ? "\(h)h" : "\(h)h \(m)m"
-        return "Starts now · \(duration) · \(task.category.title)"
+        return "\(when) · \(duration) · \(task.category.title)"
     }
 }

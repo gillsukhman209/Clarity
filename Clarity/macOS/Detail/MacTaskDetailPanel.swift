@@ -113,7 +113,7 @@ struct MacTaskDetailPanel: View {
     private func timeAndPriority(_ task: PlanTask) -> some View {
         VStack(alignment: .leading, spacing: AppSpacing.sm) {
             HStack(spacing: 6) {
-                Text(task.timeRangeLabel)
+                Text(task.hasTime ? task.timeRangeLabel : "Anytime")
                     .font(AppTypography.bodyMedium)
                     .foregroundStyle(AppColors.textPrimary)
                 Text("(\(task.durationMinutes) minutes)")

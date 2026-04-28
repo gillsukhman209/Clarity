@@ -3,13 +3,16 @@
 //  Clarity
 //
 //  Quick text-or-voice task entry.
-//  - The user can type a task and tap Add
-//  - Or tap the mic, talk for a moment, tap mic again, and the transcribed
-//    text fills the field. They can edit, then Add.
 //
-//  Either way the request is routed through PlanGenerator in `.quickAdd` mode,
-//  which extracts only the task(s) the user described — no full-day re-plan,
-//  no invented filler tasks. Result is APPENDED to the day, not replaced.
+//  Two routes:
+//  - Smart (default, instant): runs SmartTaskParser locally — no API call,
+//    appears in the plan immediately. Handles "gym tomorrow at 6am",
+//    "chiro appointment in 2 mins", "30 min focus block at 2pm", etc.
+//  - AI: routes through PlanGenerator in `.quickAdd` mode for inputs the
+//    parser can't pin down (vague phrasing, multiple linked tasks).
+//
+//  In either path, an optional priority chip overrides whatever was inferred.
+//  Result is APPENDED to the day, not replaced.
 //
 
 import SwiftUI
@@ -28,6 +31,10 @@ struct QuickAddView: View {
     @State private var recorder = AudioRecorder()
     @State private var isTranscribing: Bool = false
 
+    /// OFF (default) = local Smart parser, instant. ON = AI roundtrip.
+    @AppStorage("quickAddUseAI") private var useAI: Bool = false
+    @State private var selectedPriority: TaskPriority? = nil
+
     private let placeholders = [
         "Workout at 6pm for 45 minutes",
         "Call dentist tomorrow",
@@ -42,6 +49,7 @@ struct QuickAddView: View {
         VStack(alignment: .leading, spacing: AppSpacing.md) {
             topBar
             field
+            modeAndPriorityRow
             if let errorMessage {
                 errorBanner(errorMessage)
             }
@@ -49,7 +57,7 @@ struct QuickAddView: View {
             footer
         }
         .padding(AppSpacing.lg)
-        .frame(minWidth: 420, idealWidth: 520, minHeight: 280)
+        .frame(minWidth: 420, idealWidth: 520, minHeight: 320)
         .background(AppColors.background)
         .onAppear {
             placeholder = placeholders.randomElement() ?? ""
@@ -138,11 +146,87 @@ struct QuickAddView: View {
                     .foregroundStyle(AppColors.textTertiary)
             }
         } else {
-            Text("I'll figure out the time, duration, and category for you. Tap the mic to talk it out.")
+            Text(useAI
+                 ? "AI mode: I'll think about it before adding."
+                 : "Smart mode: parsed locally — instant. Tap the mic to talk it out.")
                 .font(AppTypography.caption)
                 .foregroundStyle(AppColors.textTertiary)
                 .padding(.horizontal, 4)
         }
+    }
+
+    // MARK: - Mode + priority row
+    private var modeAndPriorityRow: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            HStack(spacing: AppSpacing.sm) {
+                modeToggle
+                Spacer(minLength: AppSpacing.sm)
+                priorityChips
+            }
+        }
+    }
+
+    private var modeToggle: some View {
+        HStack(spacing: 0) {
+            modeButton(title: "Smart", isOn: !useAI) { useAI = false }
+            modeButton(title: "AI",    isOn: useAI)  { useAI = true  }
+        }
+        .padding(3)
+        .background(
+            Capsule(style: .continuous).fill(AppColors.surface)
+        )
+        .overlay(
+            Capsule(style: .continuous).stroke(AppColors.border, lineWidth: 1)
+        )
+    }
+
+    private func modeButton(title: String, isOn: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(AppTypography.captionSemibold)
+                .foregroundStyle(isOn ? .white : AppColors.textSecondary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(isOn ? AppColors.accent : Color.clear)
+                )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(title) mode")
+        .accessibilityAddTraits(isOn ? .isSelected : [])
+    }
+
+    private var priorityChips: some View {
+        HStack(spacing: 6) {
+            priorityChip(.low)
+            priorityChip(.medium)
+            priorityChip(.high)
+        }
+    }
+
+    private func priorityChip(_ priority: TaskPriority) -> some View {
+        let isOn = selectedPriority == priority
+        return Button {
+            selectedPriority = isOn ? nil : priority
+        } label: {
+            Text(priority.title)
+                .font(AppTypography.caption.weight(.semibold))
+                .foregroundStyle(isOn ? priority.inkColor : AppColors.textSecondary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(isOn ? priority.fillColor.opacity(0.6) : AppColors.surface)
+                )
+                .overlay(
+                    Capsule(style: .continuous)
+                        .stroke(isOn ? priority.inkColor.opacity(0.5) : AppColors.border, lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(priority.title) priority")
+        .accessibilityAddTraits(isOn ? .isSelected : [])
     }
 
     // MARK: - Mic button
@@ -235,7 +319,7 @@ struct QuickAddView: View {
                             .controlSize(.small)
                             .tint(.white)
                     } else {
-                        Image(systemName: "sparkles")
+                        Image(systemName: useAI ? "sparkles" : "bolt.fill")
                             .font(.system(size: 13, weight: .semibold))
                     }
                     Text(isProcessing ? "Adding…" : "Add")
@@ -267,17 +351,49 @@ struct QuickAddView: View {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
-        isProcessing = true
         errorMessage = nil
-        await generator.generate(from: trimmed, mode: .quickAdd)
+
+        if useAI {
+            await submitViaAI(trimmed)
+        } else {
+            submitViaSmart(trimmed)
+        }
+    }
+
+    private func submitViaSmart(_ input: String) {
+        let parsed = SmartTaskParser.parse(input)
+        let hasTime = SmartTaskParser.hasExplicitTime(in: input)
+        let anchor = parsed.startTime ?? Calendar.current.startOfDay(for: Date())
+        let task = PlanTask(
+            title: parsed.title,
+            category: parsed.category,
+            priority: selectedPriority ?? .medium,
+            section: parsed.section,
+            startTime: anchor,
+            hasTime: hasTime,
+            durationMinutes: parsed.durationMinutes
+        )
+        store.append([task])
+        dismiss()
+    }
+
+    private func submitViaAI(_ input: String) async {
+        isProcessing = true
+        await generator.generate(from: input, mode: .quickAdd)
 
         if let err = generator.error {
             errorMessage = err
             isProcessing = false
             return
         }
-        if !generator.tasks.isEmpty {
-            store.append(generator.tasks)
+        let tasks: [PlanTask]
+        if let override = selectedPriority {
+            tasks = generator.tasks.map { var t = $0; t.priority = override; return t }
+        } else {
+            tasks = generator.tasks
+        }
+        if !tasks.isEmpty {
+            store.append(tasks)
         }
         dismiss()
     }

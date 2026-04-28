@@ -28,7 +28,7 @@ struct CalendarDayCell: View {
             Spacer(minLength: 0)
         }
         .padding(6)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
                 .fill(cellBackground)
