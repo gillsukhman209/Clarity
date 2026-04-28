@@ -20,7 +20,9 @@ struct MacRootView: View {
 
     @State private var selectedTaskID: UUID?
     @State private var showBrainDump: Bool = false
-    @State private var showInsights: Bool = true
+    /// Persisted so a user who closes the Insights panel stays without it
+    /// the next time they launch.
+    @AppStorage("macShowInsights") private var showInsights: Bool = false
     @State private var currentDate: Date = Calendar.current.startOfDay(for: Date())
     @State private var mainView: MacMainView = .day
 
@@ -58,9 +60,6 @@ struct MacRootView: View {
         .animation(.easeInOut(duration: 0.22), value: mainView)
         .frame(minWidth: 1100, minHeight: 720)
         .background(AppColors.background)
-        .onAppear {
-            if selectedTaskID == nil { selectedTaskID = store.firstTaskID }
-        }
         .sheet(isPresented: $showBrainDump) {
             BrainDumpFlowView()
                 .frame(minWidth: 480, minHeight: 720)
