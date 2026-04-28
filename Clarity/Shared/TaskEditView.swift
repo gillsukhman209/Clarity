@@ -24,6 +24,8 @@ struct TaskEditView: View {
     @State private var startDate: Date = Date()
     @State private var durationMinutes: Int = 0
 
+    @State private var showDatePopover: Bool = false
+    @State private var showTimePopover: Bool = false
     @State private var loaded: Bool = false
 
     var body: some View {
@@ -35,7 +37,7 @@ struct TaskEditView: View {
                 missing
             }
         }
-        .frame(minWidth: 420, idealWidth: 520, minHeight: 540)
+        .frame(minWidth: 480, idealWidth: 540, minHeight: 600)
         .background(AppColors.background)
     }
 
@@ -57,21 +59,29 @@ struct TaskEditView: View {
             topBar
 
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: AppSpacing.lg) {
+                VStack(alignment: .leading, spacing: 22) {
                     titleField
                     categoryRow
                     priorityRow
-                    timeRow
+                    whenRow
                     durationRow
                     notesField
                 }
-                .padding(AppSpacing.lg)
+                .padding(.horizontal, AppSpacing.lg)
+                .padding(.top, AppSpacing.md)
+                .padding(.bottom, AppSpacing.lg)
             }
 
-            Divider().background(AppColors.divider)
-
             footer(for: task)
-                .padding(AppSpacing.lg)
+                .padding(.horizontal, AppSpacing.lg)
+                .padding(.vertical, AppSpacing.md)
+                .background(
+                    AppColors.surface.opacity(0.5)
+                        .overlay(
+                            Rectangle().fill(AppColors.divider).frame(height: 1),
+                            alignment: .top
+                        )
+                )
         }
     }
 
@@ -94,170 +104,277 @@ struct TaskEditView: View {
                 .disabled(!canSave)
         }
         .padding(.horizontal, AppSpacing.lg)
-        .padding(.vertical, AppSpacing.sm)
+        .padding(.vertical, AppSpacing.md)
     }
 
-    // MARK: - Fields
+    // MARK: - Title
     private var titleField: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            sectionLabel("Title")
+        VStack(alignment: .leading, spacing: 8) {
+            fieldLabel("Title")
             TextField("Title", text: $title, axis: .vertical)
                 .textFieldStyle(.plain)
-                .font(.system(size: 17, weight: .regular, design: .rounded))
+                .font(.system(size: 17, weight: .medium, design: .rounded))
                 .foregroundStyle(AppColors.textPrimary)
                 .lineLimit(1...3)
-                .padding(AppSpacing.md)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
                 .background(
-                    RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .fill(AppColors.surface)
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
-                        .stroke(AppColors.border, lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(AppColors.border.opacity(0.7), lineWidth: 1)
                 )
         }
     }
 
+    // MARK: - Category
     private var categoryRow: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            sectionLabel("Category")
-            chipFlow(
-                items: TaskCategory.allCases,
-                isSelected: { $0 == category },
-                label: { $0.title },
-                icon:  { $0.sfSymbol },
-                tint:  { $0.inkColor },
-                fill:  { $0.fillColor },
-                onTap: { category = $0 }
-            )
-        }
-    }
-
-    private var priorityRow: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            sectionLabel("Priority")
-            HStack(spacing: 8) {
-                ForEach(TaskPriority.allCases, id: \.self) { p in
-                    Button { priority = p } label: {
-                        Text(p.title)
-                            .font(AppTypography.caption.weight(.semibold))
-                            .foregroundStyle(priority == p ? p.inkColor : AppColors.textSecondary)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(
-                                Capsule(style: .continuous)
-                                    .fill(priority == p ? p.fillColor.opacity(0.6) : AppColors.surface)
-                            )
-                            .overlay(
-                                Capsule(style: .continuous)
-                                    .stroke(priority == p ? p.inkColor.opacity(0.5) : AppColors.border, lineWidth: 1)
-                            )
+        VStack(alignment: .leading, spacing: 10) {
+            fieldLabel("Category")
+            FlowLayout(spacing: 8, lineSpacing: 8) {
+                ForEach(TaskCategory.allCases) { cat in
+                    Button { category = cat } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: cat.sfSymbol)
+                                .font(.system(size: 11, weight: .semibold))
+                            Text(cat.title)
+                                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        }
+                        .foregroundStyle(category == cat ? cat.inkColor : AppColors.textSecondary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .background(
+                            Capsule(style: .continuous)
+                                .fill(category == cat ? cat.fillColor.opacity(0.65) : AppColors.surface)
+                        )
+                        .overlay(
+                            Capsule(style: .continuous)
+                                .stroke(category == cat ? cat.inkColor.opacity(0.45) : AppColors.border.opacity(0.7), lineWidth: 1)
+                        )
                     }
                     .buttonStyle(.plain)
                 }
-                Spacer()
             }
         }
     }
 
-    private var timeRow: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                sectionLabel("When")
+    // MARK: - Priority
+    private var priorityRow: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            fieldLabel("Priority")
+            HStack(spacing: 8) {
+                ForEach(TaskPriority.allCases, id: \.self) { p in
+                    priorityChip(p)
+                }
+            }
+        }
+    }
+
+    private func priorityChip(_ p: TaskPriority) -> some View {
+        let isOn = priority == p
+        return Button { priority = p } label: {
+            Text(p.title)
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .foregroundStyle(isOn ? p.inkColor : AppColors.textSecondary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(isOn ? p.fillColor.opacity(0.65) : AppColors.surface)
+                )
+                .overlay(
+                    Capsule(style: .continuous)
+                        .stroke(isOn ? p.inkColor.opacity(0.45) : AppColors.border.opacity(0.7), lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - When (date + optional time, popover-driven)
+    private var whenRow: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                fieldLabel("When")
                 Spacer()
-                Toggle("Set a time", isOn: $hasTime)
+                Toggle("", isOn: $hasTime.animation(.easeInOut(duration: 0.18)))
                     .toggleStyle(.switch)
                     .controlSize(.mini)
                     .labelsHidden()
-                Text(hasTime ? "Has time" : "Anytime")
-                    .font(AppTypography.caption)
+                Text("Set time")
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
                     .foregroundStyle(AppColors.textSecondary)
             }
-            if hasTime {
-                DatePicker(
-                    "Start",
-                    selection: $startDate,
-                    displayedComponents: [.date, .hourAndMinute]
-                )
-                .datePickerStyle(.compact)
-                .labelsHidden()
-            } else {
-                DatePicker(
-                    "Day",
-                    selection: $startDate,
-                    displayedComponents: [.date]
-                )
-                .datePickerStyle(.compact)
-                .labelsHidden()
-            }
-        }
-    }
-
-    private var durationRow: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            sectionLabel("Duration")
             HStack(spacing: 8) {
-                durationChip(label: "None", isOn: durationMinutes == 0) {
-                    durationMinutes = 0
-                }
-                ForEach([15, 30, 45, 60, 90, 120], id: \.self) { mins in
-                    durationChip(label: durationLabel(mins), isOn: durationMinutes == mins) {
-                        durationMinutes = mins
-                    }
-                }
-                Spacer()
-                if durationMinutes > 0 {
-                    Stepper("", value: $durationMinutes, in: 5...480, step: 5)
-                        .labelsHidden()
-                    Text("\(durationMinutes)m")
-                        .font(AppTypography.bodyMedium)
-                        .foregroundStyle(AppColors.textPrimary)
-                        .monospacedDigit()
-                        .frame(minWidth: 44, alignment: .trailing)
+                datePill
+                if hasTime {
+                    timePill
                 } else {
-                    Text("Open-ended")
-                        .font(AppTypography.caption)
-                        .foregroundStyle(AppColors.textTertiary)
+                    anytimeBadge
+                }
+                Spacer(minLength: 0)
+            }
+        }
+    }
+
+    private var datePill: some View {
+        Button { showDatePopover.toggle() } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "calendar")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(AppColors.accent)
+                Text(dateString)
+                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                    .foregroundStyle(AppColors.textPrimary)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(
+                Capsule(style: .continuous).fill(AppColors.surface)
+            )
+            .overlay(
+                Capsule(style: .continuous).stroke(AppColors.border.opacity(0.7), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .popover(isPresented: $showDatePopover, arrowEdge: .bottom) {
+            DatePicker("", selection: $startDate, displayedComponents: .date)
+                .datePickerStyle(.graphical)
+                .labelsHidden()
+                .frame(minWidth: 280, minHeight: 280)
+                .padding(12)
+        }
+    }
+
+    private var timePill: some View {
+        Button { showTimePopover.toggle() } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "clock")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(AppColors.accent)
+                Text(timeString)
+                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                    .foregroundStyle(AppColors.textPrimary)
+                    .monospacedDigit()
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(
+                Capsule(style: .continuous).fill(AppColors.surface)
+            )
+            .overlay(
+                Capsule(style: .continuous).stroke(AppColors.border.opacity(0.7), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .popover(isPresented: $showTimePopover, arrowEdge: .bottom) {
+            VStack(spacing: 10) {
+                Text("Time")
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundStyle(AppColors.textTertiary)
+                DatePicker("", selection: $startDate, displayedComponents: .hourAndMinute)
+                    .datePickerStyle(.graphical)
+                    .labelsHidden()
+            }
+            .padding(16)
+            .frame(minWidth: 220)
+        }
+    }
+
+    private var anytimeBadge: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "infinity")
+                .font(.system(size: 11, weight: .semibold))
+            Text("Anytime")
+                .font(.system(size: 13, weight: .medium, design: .rounded))
+        }
+        .foregroundStyle(AppColors.textTertiary)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(
+            Capsule(style: .continuous).fill(AppColors.surface.opacity(0.6))
+        )
+        .overlay(
+            Capsule(style: .continuous)
+                .stroke(AppColors.border.opacity(0.5), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+        )
+    }
+
+    private var dateString: String {
+        let f = DateFormatter()
+        f.dateFormat = "EEE, MMM d"
+        return f.string(from: startDate)
+    }
+
+    private var timeString: String {
+        let f = DateFormatter()
+        f.dateFormat = "h:mm a"
+        return f.string(from: startDate)
+    }
+
+    // MARK: - Duration (uniform-width chips, no stepper)
+    private var durationRow: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            fieldLabel("Duration")
+            HStack(spacing: 6) {
+                durationChip(label: "None", value: 0)
+                ForEach(durationPresets, id: \.self) { mins in
+                    durationChip(label: durationPresetLabel(mins), value: mins)
                 }
             }
         }
     }
 
-    private func durationChip(label: String, isOn: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+    private let durationPresets: [Int] = [15, 30, 45, 60, 90, 120]
+
+    private func durationChip(label: String, value: Int) -> some View {
+        let isOn = durationMinutes == value
+        return Button { durationMinutes = value } label: {
             Text(label)
-                .font(AppTypography.caption.weight(.semibold))
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
                 .foregroundStyle(isOn ? .white : AppColors.textSecondary)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
                 .background(
                     Capsule(style: .continuous)
                         .fill(isOn ? AppColors.accent : AppColors.surface)
                 )
                 .overlay(
                     Capsule(style: .continuous)
-                        .stroke(isOn ? AppColors.accent : AppColors.border, lineWidth: 1)
+                        .stroke(isOn ? AppColors.accent : AppColors.border.opacity(0.7), lineWidth: 1)
                 )
         }
         .buttonStyle(.plain)
     }
 
+    private func durationPresetLabel(_ mins: Int) -> String {
+        if mins < 60 { return "\(mins)m" }
+        let h = mins / 60
+        let m = mins % 60
+        return m == 0 ? "\(h)h" : "\(h)h\(m)"
+    }
+
+    // MARK: - Notes
     private var notesField: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            sectionLabel("Notes")
+        VStack(alignment: .leading, spacing: 8) {
+            fieldLabel("Notes")
             TextField("Anything to remember", text: $notes, axis: .vertical)
                 .textFieldStyle(.plain)
-                .font(AppTypography.body)
+                .font(.system(size: 14, design: .rounded))
                 .foregroundStyle(AppColors.textPrimary)
                 .lineLimit(2...8)
-                .padding(AppSpacing.md)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
                 .background(
-                    RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .fill(AppColors.surface)
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
-                        .stroke(AppColors.border, lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(AppColors.border.opacity(0.7), lineWidth: 1)
                 )
         }
     }
@@ -274,14 +391,14 @@ struct TaskEditView: View {
                     Image(systemName: "trash")
                         .font(.system(size: 12, weight: .semibold))
                     Text("Delete")
-                        .font(AppTypography.bodySemibold)
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
                 }
                 .foregroundStyle(AppColors.Priority.highInk)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 9)
                 .background(
                     Capsule(style: .continuous)
-                        .stroke(AppColors.Priority.highInk.opacity(0.4), lineWidth: 1)
+                        .stroke(AppColors.Priority.highInk.opacity(0.35), lineWidth: 1)
                 )
             }
             .buttonStyle(.plain)
@@ -293,7 +410,7 @@ struct TaskEditView: View {
                     Image(systemName: "checkmark")
                         .font(.system(size: 12, weight: .semibold))
                     Text("Save changes")
-                        .font(AppTypography.bodySemibold)
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
                 }
                 .foregroundStyle(.white)
                 .padding(.horizontal, 18)
@@ -314,18 +431,10 @@ struct TaskEditView: View {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    private func sectionLabel(_ text: String) -> some View {
-        Text(text.uppercased())
-            .font(AppTypography.captionSemibold)
-            .tracking(0.6)
+    private func fieldLabel(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 12, weight: .semibold, design: .rounded))
             .foregroundStyle(AppColors.textTertiary)
-    }
-
-    private func durationLabel(_ mins: Int) -> String {
-        if mins < 60 { return "\(mins)m" }
-        let h = mins / 60
-        let m = mins % 60
-        return m == 0 ? "\(h)h" : "\(h)h\(m)"
     }
 
     private func hydrate(from task: PlanTask) {
@@ -372,49 +481,13 @@ struct TaskEditView: View {
         onClose()
         dismiss()
     }
-
-    // MARK: - Chip flow layout
-    @ViewBuilder
-    private func chipFlow<T: Hashable>(
-        items: [T],
-        isSelected: @escaping (T) -> Bool,
-        label: @escaping (T) -> String,
-        icon: @escaping (T) -> String,
-        tint: @escaping (T) -> Color,
-        fill: @escaping (T) -> Color,
-        onTap: @escaping (T) -> Void
-    ) -> some View {
-        FlowLayout(spacing: 8) {
-            ForEach(items, id: \.self) { item in
-                Button { onTap(item) } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: icon(item))
-                            .font(.system(size: 11, weight: .semibold))
-                        Text(label(item))
-                            .font(AppTypography.caption.weight(.semibold))
-                    }
-                    .foregroundStyle(isSelected(item) ? tint(item) : AppColors.textSecondary)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(
-                        Capsule(style: .continuous)
-                            .fill(isSelected(item) ? fill(item) : AppColors.surface)
-                    )
-                    .overlay(
-                        Capsule(style: .continuous)
-                            .stroke(isSelected(item) ? tint(item).opacity(0.5) : AppColors.border, lineWidth: 1)
-                    )
-                }
-                .buttonStyle(.plain)
-            }
-        }
-    }
 }
 
 // MARK: - FlowLayout
-/// Simple wrap-to-next-line layout so chips don't overflow narrow widths.
+/// Wrap-to-next-line layout for chip rows (e.g. category picker).
 private struct FlowLayout: Layout {
     var spacing: CGFloat = 8
+    var lineSpacing: CGFloat = 8
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let maxWidth = proposal.width ?? .infinity
@@ -425,7 +498,7 @@ private struct FlowLayout: Layout {
         for subview in subviews {
             let size = subview.sizeThatFits(.unspecified)
             if x + size.width > maxWidth {
-                y += rowHeight + spacing
+                y += rowHeight + lineSpacing
                 x = 0
                 rowHeight = 0
             }
@@ -444,7 +517,7 @@ private struct FlowLayout: Layout {
         for subview in subviews {
             let size = subview.sizeThatFits(.unspecified)
             if x - bounds.minX + size.width > maxWidth {
-                y += rowHeight + spacing
+                y += rowHeight + lineSpacing
                 x = bounds.minX
                 rowHeight = 0
             }
