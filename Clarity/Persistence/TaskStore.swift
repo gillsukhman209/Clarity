@@ -174,6 +174,24 @@ final class TaskStore {
         refresh()
     }
 
+    /// Persists the edited task. Title, time, priority, category, etc. all
+    /// flow through here — the row keeps its `id`, so the SwiftData record is
+    /// updated in place and notifications get rescheduled by `refresh()`.
+    func update(_ task: PlanTask) {
+        guard let record = fetchRecord(task.id) else { return }
+        record.title = task.title
+        record.category = task.category
+        record.priority = task.priority
+        record.section = task.section
+        record.startTime = task.startTime
+        record.hasTime = task.hasTime
+        record.durationMinutes = task.durationMinutes
+        record.notes = task.notes
+        record.isCompleted = task.isCompleted
+        save()
+        refresh()
+    }
+
     func toggleSubtask(taskID: UUID, subtaskID: UUID) {
         guard let record = fetchRecord(taskID),
               let sub = (record.subtasks ?? []).first(where: { $0.id == subtaskID })

@@ -11,7 +11,6 @@ import SwiftUI
 struct SidebarView: View {
     @Binding var selection: MacMainView
     @State private var showSettings: Bool = false
-    @Environment(CloudSyncStatus.self) private var cloudStatus
     @Environment(TaskStore.self) private var store
 
     var body: some View {
@@ -29,8 +28,8 @@ struct SidebarView: View {
 
             Spacer(minLength: 0)
 
-            HStack(alignment: .center, spacing: 8) {
-                syncFooter
+            HStack {
+                Spacer()
                 settingsButton
             }
             .padding(AppSpacing.md)
@@ -85,37 +84,6 @@ struct SidebarView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-    }
-
-    // MARK: - Sync footer
-    private var syncFooter: some View {
-        HStack(spacing: 8) {
-            Circle()
-                .fill(syncDotColor)
-                .frame(width: 7, height: 7)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(cloudStatus.state.label)
-                    .font(AppTypography.captionSemibold)
-                    .foregroundStyle(AppColors.textPrimary)
-                TimelineView(.periodic(from: .now, by: 60)) { _ in
-                    Text(cloudStatus.detailLabel)
-                        .font(AppTypography.caption)
-                        .foregroundStyle(AppColors.textTertiary)
-                }
-            }
-            Spacer()
-        }
-    }
-
-    private var syncDotColor: Color {
-        switch cloudStatus.state {
-        case .available:
-            return AppColors.Priority.lowInk
-        case .checking:
-            return AppColors.textTertiary
-        case .signedOut, .restricted, .unavailable:
-            return AppColors.Priority.mediumInk
-        }
     }
 
     // MARK: - Settings gear

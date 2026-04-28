@@ -125,7 +125,6 @@ struct DashboardView: View {
     private var toolbar: some View {
         HStack(spacing: AppSpacing.sm) {
             todayNavigator
-            replanButton
             Spacer()
             searchField
             addTaskButton
@@ -210,21 +209,6 @@ struct DashboardView: View {
                 .font(.system(size: 11, weight: .bold))
                 .foregroundStyle(AppColors.textSecondary)
                 .frame(width: 24, height: 24)
-        }
-    }
-
-    private var replanButton: some View {
-        HoverScaleButton(action: {}) {
-            HStack(spacing: 6) {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 12, weight: .semibold))
-                Text("Re-plan")
-                    .font(AppTypography.bodyMedium)
-            }
-            .foregroundStyle(AppColors.accent)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
-            .background(Capsule(style: .continuous).fill(AppColors.accentSoft.opacity(0.45)))
         }
     }
 
