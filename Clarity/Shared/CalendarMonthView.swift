@@ -129,6 +129,8 @@ struct CalendarMonthView: View {
                         }
                     }
                     .frame(height: rowHeight(for: maxTasks))
+                    .animation(.spring(response: 0.4, dampingFraction: 0.85),
+                               value: row.map { store.tasks(on: $0).map(\.id) })
                 }
             }
         }
@@ -198,7 +200,10 @@ struct CalendarMonthView: View {
             isInCurrentMonth: inMonth,
             isSelected: isSelected,
             isToday: isToday,
-            maxVisibleChips: maxVisibleChips
+            maxVisibleChips: maxVisibleChips,
+            onDropTask: { taskID in
+                store.move(taskID, to: date)
+            }
         )
         .onTapGesture {
             currentDate = calendar.startOfDay(for: date)

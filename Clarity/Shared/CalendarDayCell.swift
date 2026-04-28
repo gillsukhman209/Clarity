@@ -2,9 +2,10 @@
 //  CalendarDayCell.swift
 //  Clarity
 //
-//  A single day in the full-page calendar grid. Shows the day number plus
-//  a few task chips. The parent caps how many chips can show via
-//  `maxVisibleChips`, so quiet weeks render small and busy weeks stay legible.
+//  A single day in the full-page calendar grid. Day number + task chips.
+//  Chips are draggable, the whole cell is a drop target — so you can drag
+//  any task from one day to another and it lands on the new day at the
+//  same time-of-day.
 //
 
 import SwiftUI
@@ -16,6 +17,9 @@ struct CalendarDayCell: View {
     let isSelected: Bool
     let isToday: Bool
     var maxVisibleChips: Int = 3
+    var onDropTask: (UUID) -> Void = { _ in }
+
+    @State private var isDropTarget: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
@@ -31,14 +35,46 @@ struct CalendarDayCell: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
-                .stroke(isSelected ? AppColors.accent : AppColors.border.opacity(0.6),
-                        lineWidth: isSelected ? 1.5 : 0.5)
+                .stroke(borderColor, lineWidth: borderWidth)
         )
         .opacity(isInCurrentMonth ? 1.0 : 0.4)
+        .scaleEffect(isDropTarget ? 1.03 : 1.0)
         .contentShape(Rectangle())
+        .dropDestination(for: DraggedTask.self) { items, _ in
+            guard let first = items.first else { return false }
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                onDropTask(first.taskID)
+            }
+            return true
+        } isTargeted: { hovering in
+            withAnimation(.easeOut(duration: 0.14)) {
+                isDropTarget = hovering
+            }
+        }
+        .animation(.easeOut(duration: 0.14), value: isSelected)
     }
 
-    // MARK: - Pieces
+    // MARK: - Visual state
+
+    private var cellBackground: Color {
+        if isDropTarget { return AppColors.accentSoft.opacity(0.45) }
+        if isSelected   { return AppColors.accentSoft.opacity(0.35) }
+        return AppColors.surface
+    }
+
+    private var borderColor: Color {
+        if isDropTarget { return AppColors.accent }
+        if isSelected   { return AppColors.accent }
+        return AppColors.border.opacity(0.6)
+    }
+
+    private var borderWidth: CGFloat {
+        if isDropTarget { return 2 }
+        if isSelected   { return 1.5 }
+        return 0.5
+    }
+
+    // MARK: - Day number
 
     private var dayNumberRow: some View {
         HStack(spacing: 4) {
@@ -61,12 +97,25 @@ struct CalendarDayCell: View {
         }
     }
 
+    // MARK: - Chips
+
     @ViewBuilder
     private var chipsStack: some View {
         if maxVisibleChips > 0 {
             VStack(alignment: .leading, spacing: 2) {
                 ForEach(tasks.prefix(maxVisibleChips)) { task in
                     chip(for: task)
+                        .draggable(DraggedTask(taskID: task.id)) {
+                            // Lifted preview while dragging.
+                            chip(for: task)
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 3)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                        .fill(AppColors.surface)
+                                )
+                                .shadow(color: Color.black.opacity(0.22), radius: 8, y: 4)
+                        }
                 }
             }
         }
@@ -90,10 +139,6 @@ struct CalendarDayCell: View {
             RoundedRectangle(cornerRadius: 4, style: .continuous)
                 .fill(task.category.fillColor.opacity(0.7))
         )
-    }
-
-    private var cellBackground: Color {
-        if isSelected { return AppColors.accentSoft.opacity(0.35) }
-        return AppColors.surface
+        .contentShape(Rectangle())
     }
 }

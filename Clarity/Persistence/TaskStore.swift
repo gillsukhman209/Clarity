@@ -138,6 +138,25 @@ final class TaskStore {
         }
     }
 
+    /// Move a task to a different day, preserving its time-of-day.
+    /// Used by the calendar's drag-and-drop. No-op if the task ends up
+    /// on the same day it's already on.
+    func move(_ taskID: UUID, to newDate: Date) {
+        guard let record = fetchRecord(taskID) else { return }
+        let cal = Calendar.current
+        let timeComps = cal.dateComponents([.hour, .minute, .second], from: record.startTime)
+        var components = cal.dateComponents([.year, .month, .day], from: newDate)
+        components.hour   = timeComps.hour
+        components.minute = timeComps.minute
+        components.second = timeComps.second
+        guard let updated = cal.date(from: components),
+              !cal.isDate(updated, inSameDayAs: record.startTime)
+        else { return }
+        record.startTime = updated
+        save()
+        refresh()
+    }
+
     /// Wipes every task on this device. With CloudKit on, the deletion
     /// replicates to your iCloud private database and propagates to other
     /// signed-in devices in the background.
