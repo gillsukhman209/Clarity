@@ -124,10 +124,10 @@ struct MacTaskDetailPanel: View {
         }
     }
 
-    // MARK: - Why this first / notes
+    // MARK: - Notes
     private func whyAndNotes(_ notes: String) -> some View {
         VStack(alignment: .leading, spacing: AppSpacing.xs) {
-            Text("Why this first?")
+            Text("Notes")
                 .font(AppTypography.captionSemibold)
                 .tracking(0.6)
                 .foregroundStyle(AppColors.textTertiary)
