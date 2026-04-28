@@ -2,15 +2,14 @@
 //  SidebarView.swift
 //  Clarity
 //
-//  Phase 4 — macOS sidebar.
-//  Stripped to "Today" + sync footer + Settings gear.
-//  Smart Lists / History / Timeline / Insights nav return as we build them.
+//  macOS sidebar: Today / Calendar nav + sync footer + Settings gear.
 //
 
 #if os(macOS)
 import SwiftUI
 
 struct SidebarView: View {
+    @Binding var selection: MacMainView
     @State private var showSettings: Bool = false
     @Environment(CloudSyncStatus.self) private var cloudStatus
     @Environment(TaskStore.self) private var store
@@ -23,7 +22,8 @@ struct SidebarView: View {
                 .padding(.bottom, AppSpacing.md)
 
             VStack(alignment: .leading, spacing: AppSpacing.xs) {
-                todayRow
+                navRow(.day, label: "Today", symbol: "calendar.day.timeline.left")
+                navRow(.calendar, label: "Calendar", symbol: "calendar")
             }
             .padding(.horizontal, AppSpacing.sm)
 
@@ -61,23 +61,30 @@ struct SidebarView: View {
         }
     }
 
-    // MARK: - Today row (the only nav item for now)
-    private var todayRow: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "calendar.day.timeline.left")
-                .font(.system(size: 13, weight: .semibold))
-                .frame(width: 18)
-            Text("Today")
-                .font(AppTypography.bodyMedium)
-            Spacer()
+    // MARK: - Nav row
+    private func navRow(_ target: MacMainView, label: String, symbol: String) -> some View {
+        let isSelected = (selection == target)
+        return Button {
+            selection = target
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: symbol)
+                    .font(.system(size: 13, weight: .semibold))
+                    .frame(width: 18)
+                Text(label)
+                    .font(AppTypography.bodyMedium)
+                Spacer()
+            }
+            .foregroundStyle(isSelected ? AppColors.textPrimary : AppColors.textSecondary)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(
+                RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
+                    .fill(isSelected ? AppColors.surface : Color.clear)
+            )
+            .contentShape(Rectangle())
         }
-        .foregroundStyle(AppColors.textPrimary)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 7)
-        .background(
-            RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
-                .fill(AppColors.surface)
-        )
+        .buttonStyle(.plain)
     }
 
     // MARK: - Sync footer
@@ -90,8 +97,6 @@ struct SidebarView: View {
                 Text(cloudStatus.state.label)
                     .font(AppTypography.captionSemibold)
                     .foregroundStyle(AppColors.textPrimary)
-                // Re-render the relative time every minute so "5 min ago"
-                // becomes "6 min ago" without forcing the user to do anything.
                 TimelineView(.periodic(from: .now, by: 60)) { _ in
                     Text(cloudStatus.detailLabel)
                         .font(AppTypography.caption)

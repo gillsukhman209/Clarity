@@ -17,7 +17,6 @@ struct DashboardView: View {
 
     @Environment(TaskStore.self) private var store
     @State private var showQuickAdd: Bool = false
-    @State private var showDatePicker: Bool = false
 
     private var visibleSections: [DaySection] {
         store.daySections(on: currentDate)
@@ -125,23 +124,10 @@ struct DashboardView: View {
     private var todayNavigator: some View {
         HStack(spacing: 6) {
             chevronButton(symbol: "chevron.left", action: { stepDate(-1) })
-            Button {
-                showDatePicker = true
-            } label: {
-                HStack(spacing: 4) {
-                    Text(navigatorLabel)
-                        .font(AppTypography.bodySemibold)
-                        .foregroundStyle(AppColors.textPrimary)
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(AppColors.textTertiary)
-                }
+            Text(navigatorLabel)
+                .font(AppTypography.bodySemibold)
+                .foregroundStyle(AppColors.textPrimary)
                 .frame(minWidth: 80)
-            }
-            .buttonStyle(.plain)
-            .popover(isPresented: $showDatePicker, arrowEdge: .bottom) {
-                DatePickerSheet(date: $currentDate, isPresented: $showDatePicker)
-            }
             chevronButton(symbol: "chevron.right", action: { stepDate(1) })
         }
         .padding(.horizontal, 6)
