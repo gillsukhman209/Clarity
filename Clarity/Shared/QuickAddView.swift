@@ -103,6 +103,7 @@ struct QuickAddView: View {
 
             HStack(alignment: .top, spacing: AppSpacing.sm) {
                 TextField(placeholder, text: $text, axis: .vertical)
+                    .textFieldStyle(.plain)
                     .font(.system(size: 17, weight: .regular, design: .rounded))
                     .foregroundStyle(AppColors.textPrimary)
                     .lineLimit(2...8)
