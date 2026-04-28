@@ -2,65 +2,69 @@
 //  AppColors.swift
 //  Clarity
 //
+//  Every color is dynamic — resolves to a light or dark value automatically.
+//  Backgrounds, surfaces, text, borders, brand, category fills/inks, and
+//  priority colors all adapt.
+//
 
 import SwiftUI
 
 enum AppColors {
-    // Backgrounds
-    static let background = Color(red: 0.98, green: 0.98, blue: 0.97)        // off-white
-    static let surface = Color.white
-    static let surfaceElevated = Color.white
-    static let sidebarBackground = Color(red: 0.96, green: 0.96, blue: 0.95)
+    // MARK: - Surfaces
+    static let background        = Color(lightHex: 0xFAFAF7, darkHex: 0x16161B)
+    static let surface           = Color(lightHex: 0xFFFFFF, darkHex: 0x1F1F26)
+    static let surfaceElevated   = Color(lightHex: 0xFFFFFF, darkHex: 0x252530)
+    static let sidebarBackground = Color(lightHex: 0xF5F5F2, darkHex: 0x111118)
 
-    // Text
-    static let textPrimary = Color(red: 0.10, green: 0.10, blue: 0.13)
-    static let textSecondary = Color(red: 0.42, green: 0.42, blue: 0.46)
-    static let textTertiary = Color(red: 0.62, green: 0.62, blue: 0.66)
+    // MARK: - Text
+    static let textPrimary   = Color(lightHex: 0x1A1A21, darkHex: 0xF0F0F4)
+    static let textSecondary = Color(lightHex: 0x6B6B75, darkHex: 0xA0A0AA)
+    static let textTertiary  = Color(lightHex: 0x9E9EA8, darkHex: 0x6B6B75)
 
-    // Borders / hairlines
-    static let border = Color(red: 0.91, green: 0.91, blue: 0.90)
-    static let divider = Color(red: 0.94, green: 0.94, blue: 0.93)
+    // MARK: - Borders / hairlines
+    static let border  = Color(lightHex: 0xE8E8E5, darkHex: 0x2A2A32)
+    static let divider = Color(lightHex: 0xF0F0ED, darkHex: 0x1F1F26)
 
-    // Brand
-    static let accent = Color(red: 0.45, green: 0.36, blue: 0.93)            // purple mic
-    static let accentSoft = Color(red: 0.90, green: 0.87, blue: 1.00)
+    // MARK: - Brand
+    static let accent     = Color(lightHex: 0x735CED, darkHex: 0x8E89FF)
+    static let accentSoft = Color(lightHex: 0xE5DEFF, darkHex: 0x2A2540)
 
-    // Pastel category fills (soft tints used for chips & card accents)
+    // MARK: - Category palette
     enum Category {
-        static let workFill        = Color(red: 0.88, green: 0.92, blue: 1.00)
-        static let workInk         = Color(red: 0.21, green: 0.40, blue: 0.78)
+        static let workFill        = Color(lightHex: 0xE1EBFF, darkHex: 0x1A2540)
+        static let workInk         = Color(lightHex: 0x3666C7, darkHex: 0x82A6E8)
 
-        static let personalFill    = Color(red: 0.89, green: 0.96, blue: 0.89)
-        static let personalInk     = Color(red: 0.20, green: 0.52, blue: 0.32)
+        static let personalFill    = Color(lightHex: 0xE3F5E3, darkHex: 0x1A3A24)
+        static let personalInk     = Color(lightHex: 0x338552, darkHex: 0x6EC487)
 
-        static let healthFill      = Color(red: 1.00, green: 0.89, blue: 0.89)
-        static let healthInk       = Color(red: 0.74, green: 0.30, blue: 0.40)
+        static let healthFill      = Color(lightHex: 0xFFE3E3, darkHex: 0x401E24)
+        static let healthInk       = Color(lightHex: 0xBD4D66, darkHex: 0xE88290)
 
-        static let adminFill       = Color(red: 1.00, green: 0.95, blue: 0.83)
-        static let adminInk        = Color(red: 0.60, green: 0.45, blue: 0.10)
+        static let adminFill       = Color(lightHex: 0xFFF2D4, darkHex: 0x3A2D14)
+        static let adminInk        = Color(lightHex: 0x99731A, darkHex: 0xD9AC56)
 
-        static let createFill      = Color(red: 0.94, green: 0.89, blue: 1.00)
-        static let createInk       = Color(red: 0.49, green: 0.30, blue: 0.78)
+        static let createFill      = Color(lightHex: 0xF0E3FF, darkHex: 0x2A1F3F)
+        static let createInk       = Color(lightHex: 0x7D4DC7, darkHex: 0xB58CE8)
 
-        static let focusFill       = Color(red: 0.86, green: 0.93, blue: 0.99)
-        static let focusInk        = Color(red: 0.18, green: 0.42, blue: 0.70)
+        static let focusFill       = Color(lightHex: 0xDBEDFC, darkHex: 0x142340)
+        static let focusInk        = Color(lightHex: 0x2E6BB3, darkHex: 0x75ACE8)
 
-        static let energizeFill    = Color(red: 1.00, green: 0.91, blue: 0.83)
-        static let energizeInk     = Color(red: 0.78, green: 0.42, blue: 0.18)
+        static let energizeFill    = Color(lightHex: 0xFFE8D4, darkHex: 0x3D2514)
+        static let energizeInk     = Color(lightHex: 0xC76B2E, darkHex: 0xE8966A)
 
-        static let windDownFill    = Color(red: 0.92, green: 0.91, blue: 1.00)
-        static let windDownInk     = Color(red: 0.40, green: 0.36, blue: 0.72)
+        static let windDownFill    = Color(lightHex: 0xEBE8FF, darkHex: 0x1F1D3D)
+        static let windDownInk     = Color(lightHex: 0x665CB8, darkHex: 0x9D97DC)
     }
 
-    // Priority colors
+    // MARK: - Priority
     enum Priority {
-        static let highFill   = Color(red: 1.00, green: 0.90, blue: 0.90)
-        static let highInk    = Color(red: 0.78, green: 0.24, blue: 0.30)
+        static let highFill   = Color(lightHex: 0xFFE6E6, darkHex: 0x401E24)
+        static let highInk    = Color(lightHex: 0xC73D4D, darkHex: 0xE88290)
 
-        static let mediumFill = Color(red: 1.00, green: 0.95, blue: 0.83)
-        static let mediumInk  = Color(red: 0.70, green: 0.50, blue: 0.10)
+        static let mediumFill = Color(lightHex: 0xFFF2D4, darkHex: 0x3A2D14)
+        static let mediumInk  = Color(lightHex: 0xB3801A, darkHex: 0xD9AC56)
 
-        static let lowFill    = Color(red: 0.89, green: 0.96, blue: 0.92)
-        static let lowInk     = Color(red: 0.20, green: 0.52, blue: 0.40)
+        static let lowFill    = Color(lightHex: 0xE3F5EB, darkHex: 0x1A352A)
+        static let lowInk     = Color(lightHex: 0x338566, darkHex: 0x6EC4A0)
     }
 }

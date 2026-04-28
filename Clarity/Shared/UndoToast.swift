@@ -25,9 +25,9 @@ struct UndoToast: View {
             .padding(.vertical, 8)
             .background(
                 Capsule(style: .continuous)
-                    .fill(Color(white: 0.12))
+                    .fill(Color(lightHex: 0x1F1F26, darkHex: 0x4A4A55))
             )
-            .shadow(color: Color.black.opacity(0.22), radius: 14, x: 0, y: 6)
+            .shadow(color: Color.black.opacity(0.30), radius: 14, x: 0, y: 6)
         }
         .buttonStyle(PressableStyle(pressedScale: 0.96))
     }

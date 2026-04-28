@@ -9,6 +9,7 @@ import SwiftData
 struct ContentView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.scenePhase) private var scenePhase
+    @AppStorage("appearance") private var appearance: AppearancePreference = .system
     @State private var store: TaskStore?
     @State private var transcription = TranscriptionService()
     @State private var cloudStatus = CloudSyncStatus()
@@ -45,7 +46,7 @@ struct ContentView: View {
                 AppColors.background.ignoresSafeArea()
             }
         }
-        .preferredColorScheme(.light)
+        .preferredColorScheme(appearance.colorScheme)
         .task {
             if store == nil {
                 store = TaskStore(context: context, notifications: notifications)

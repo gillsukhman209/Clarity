@@ -11,6 +11,7 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(TaskStore.self) private var store
+    @AppStorage("appearance") private var appearance: AppearancePreference = .system
 
     @State private var showResetConfirmation = false
 
@@ -33,6 +34,7 @@ struct SettingsView: View {
     private var content: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: AppSpacing.lg) {
+                appearanceCard
                 aiCard
                 aboutCard
                 dangerZoneCard
@@ -40,6 +42,29 @@ struct SettingsView: View {
             .padding(AppSpacing.lg)
         }
         .background(AppColors.background)
+    }
+
+    // MARK: - Appearance
+
+    private var appearanceCard: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            sectionLabel("Appearance")
+            AppCard {
+                VStack(alignment: .leading, spacing: AppSpacing.sm) {
+                    Picker("Theme", selection: $appearance) {
+                        ForEach(AppearancePreference.allCases) { pref in
+                            Label(pref.label, systemImage: pref.icon).tag(pref)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    Text("Choose System to follow your device, or pick Light or Dark to override.")
+                        .font(AppTypography.caption)
+                        .foregroundStyle(AppColors.textTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
     }
 
     #if os(macOS)
