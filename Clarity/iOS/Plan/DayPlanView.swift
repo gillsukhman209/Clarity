@@ -15,9 +15,16 @@ struct DayPlanView: View {
     @Environment(TaskStore.self) private var store
     @State private var presentedTask: SelectedTask?
     @State private var showQuickAdd: Bool = false
+    /// Shared with the macOS dashboard via the same UserDefaults key.
+    /// ON = grouped by section (default). OFF = flat chronological.
+    @AppStorage("dashboardGroupBySection") private var groupBySection: Bool = true
 
     private var visibleTasks: [PlanTask] {
         store.tasks(on: currentDate)
+    }
+
+    private var visibleSections: [DaySection] {
+        store.daySections(on: currentDate)
     }
 
     private var dateLabel: String {
@@ -50,6 +57,8 @@ struct DayPlanView: View {
                 Divider().background(AppColors.divider)
                 if visibleTasks.isEmpty {
                     emptyState
+                } else if groupBySection {
+                    sectionedTaskList
                 } else {
                     taskList
                 }
@@ -114,12 +123,76 @@ struct DayPlanView: View {
                     .frame(width: 36, height: 36)
             }
             .buttonStyle(.plain)
+
+            Button {
+                groupBySection.toggle()
+            } label: {
+                Image(systemName: groupBySection ? "rectangle.stack" : "list.bullet")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(groupBySection ? AppColors.accent : AppColors.textSecondary)
+                    .frame(width: 36, height: 36)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(groupBySection ? "Switch to time-sorted view" : "Switch to grouped view")
         }
         .padding(.horizontal, AppSpacing.lg)
         .padding(.vertical, AppSpacing.sm)
     }
 
-    // MARK: - Task list
+    // MARK: - Sectioned task list (groupBySection == true)
+    private var sectionedTaskList: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: AppSpacing.lg) {
+                ForEach(visibleSections) { section in
+                    VStack(alignment: .leading, spacing: AppSpacing.sm) {
+                        DaySectionHeader(section: section)
+                            .padding(.horizontal, AppSpacing.xs)
+                        VStack(spacing: AppSpacing.xs) {
+                            ForEach(section.tasks) { task in
+                                SwipeableRow(
+                                    onTap: { presentedTask = SelectedTask(id: task.id) },
+                                    leadingAction: SwipeAction(
+                                        symbol: task.isCompleted ? "arrow.uturn.backward" : "checkmark",
+                                        title: task.isCompleted ? "Undo" : "Done",
+                                        color: AppColors.Priority.lowInk,
+                                        action: { store.toggleComplete(task.id) }
+                                    ),
+                                    trailingAction: SwipeAction(
+                                        symbol: "trash",
+                                        title: "Delete",
+                                        color: AppColors.Priority.highInk,
+                                        isDestructive: true,
+                                        action: { store.delete(task.id) }
+                                    )
+                                ) {
+                                    row(for: task, previous: nil)
+                                        .background(AppColors.background)
+                                }
+                                .contextMenu {
+                                    Button {
+                                        store.toggleComplete(task.id)
+                                    } label: {
+                                        Label(task.isCompleted ? "Mark incomplete" : "Mark complete",
+                                              systemImage: task.isCompleted ? "arrow.uturn.backward" : "checkmark.circle")
+                                    }
+                                    Button(role: .destructive) {
+                                        store.delete(task.id)
+                                    } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, AppSpacing.md)
+            .padding(.top, AppSpacing.md)
+            .padding(.bottom, 140)
+        }
+    }
+
+    // MARK: - Flat task list (groupBySection == false)
     private var taskList: some View {
         ScrollView {
             LazyVStack(spacing: AppSpacing.xs) {

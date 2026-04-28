@@ -2,8 +2,10 @@
 //  DaySectionHeader.swift
 //  Clarity
 //
+//  Section header for the grouped day-plan view (Focus Time, Create, etc.).
+//  Cross-platform — used on both iOS DayPlanView and macOS DashboardView.
+//
 
-#if os(macOS)
 import SwiftUI
 
 struct DaySectionHeader: View {
@@ -38,4 +40,3 @@ struct DaySectionHeader: View {
         .padding(.vertical, 4)
     }
 }
-#endif
