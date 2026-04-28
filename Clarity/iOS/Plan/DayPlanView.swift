@@ -23,8 +23,8 @@ struct DayPlanView: View {
         store.tasks(on: currentDate)
     }
 
-    private var visibleSections: [DaySection] {
-        store.daySections(on: currentDate)
+    private var visibleGroups: [CategoryGroup] {
+        store.categoryGroups(on: currentDate)
     }
 
     private var dateLabel: String {
@@ -143,12 +143,12 @@ struct DayPlanView: View {
     private var sectionedTaskList: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: AppSpacing.lg) {
-                ForEach(visibleSections) { section in
+                ForEach(visibleGroups) { group in
                     VStack(alignment: .leading, spacing: AppSpacing.sm) {
-                        DaySectionHeader(section: section)
+                        CategoryGroupHeader(group: group)
                             .padding(.horizontal, AppSpacing.xs)
                         VStack(spacing: AppSpacing.xs) {
-                            ForEach(section.tasks) { task in
+                            ForEach(group.tasks) { task in
                                 SwipeableRow(
                                     onTap: { presentedTask = SelectedTask(id: task.id) },
                                     leadingAction: SwipeAction(

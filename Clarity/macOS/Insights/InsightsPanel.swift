@@ -113,9 +113,10 @@ struct InsightsPanel: View {
     }
 
     private func computeStats(_ tasks: [PlanTask]) -> DayStats {
-        let focus    = tasks.filter { $0.section == .focusTime || $0.section == .create }
-        let gtd      = tasks.filter { $0.section == .getThingsDone }
-        let energize = tasks.filter { $0.section == .energize }
+        // Insight rollups now key off category instead of the old section.
+        let focus    = tasks.filter { $0.category == .focus || $0.category == .create }
+        let gtd      = tasks.filter { $0.category == .work || $0.category == .admin || $0.category == .personal }
+        let energize = tasks.filter { $0.category == .energize || $0.category == .health }
         return DayStats(
             totalTasks: tasks.count,
             completedCount: tasks.filter(\.isCompleted).count,

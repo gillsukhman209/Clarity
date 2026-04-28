@@ -368,7 +368,6 @@ struct QuickAddView: View {
             title: parsed.title,
             category: parsed.category,
             priority: selectedPriority ?? .medium,
-            section: parsed.section,
             startTime: anchor,
             hasTime: hasTime,
             durationMinutes: parsed.durationMinutes

@@ -123,7 +123,7 @@ final class PlanGenerator {
                 : " — subtasks: \(task.subtasks.map(\.title).joined(separator: "; "))"
             let day = Self.dayLabel(for: task.startTime)
             let when = task.hasTime ? task.startTimeLabel : "Anytime"
-            return "- [\(day)] \(when) \(task.title) (\(task.durationMinutes)m, category=\(task.category.rawValue), priority=\(task.priority.rawValue), section=\(task.section.rawValue), hasTime=\(task.hasTime))\(subs)"
+            return "- [\(day)] \(when) \(task.title) (\(task.durationMinutes)m, category=\(task.category.rawValue), priority=\(task.priority.rawValue), hasTime=\(task.hasTime))\(subs)"
         }
         let summary = lines.joined(separator: "\n")
 
@@ -234,25 +234,17 @@ final class PlanGenerator {
 
     PER-TASK FIELDS:
     - title: short, action-oriented, faithful to what the user said
-    - category, priority, section: see allowed values
+    - category, priority: see allowed values
     - dayOffset: integer, see above
     - hasTime: TRUE if the user explicitly mentioned a time ("at 3pm", "tonight"). FALSE if they didn't — do NOT invent a time. Tasks with hasTime=false render at the bottom with no time label.
     - startHour, startMinute: only meaningful when hasTime is true. Set both to 0 when hasTime is false.
-    - durationMinutes: realistic numbers (estimate duration if not given; default 30 min)
+    - durationMinutes: integer minutes if the user mentioned a length ("for 30 min", "1 hour"). Use 0 when no duration is implied — do NOT invent one.
     - notes: 1 sentence on how to approach it (or empty string if obvious)
     - subtasks: empty array unless the user explicitly described multiple steps
 
     ALLOWED VALUES:
     - category: "work" | "personal" | "health" | "admin" | "focus" | "create" | "energize" | "windDown"
     - priority: "low" | "medium" | "high"
-    - section: "focusTime" | "create" | "getThingsDone" | "energize" | "windDown"
-
-    SECTION GUIDANCE:
-    - focusTime: deep, uninterrupted thinking work
-    - create: making something new (writing, design, content)
-    - getThingsDone: admin, errands, meetings, quick wins
-    - energize: meals, breaks, exercise
-    - windDown: low-effort, evening tasks, calls, reading
     """
 
     // MARK: - Plan-day prompt
@@ -288,25 +280,17 @@ final class PlanGenerator {
 
     PER-TASK FIELDS:
     - title: short, action-oriented, faithful to what the user said
-    - category, priority, section: see allowed values
+    - category, priority: see allowed values
     - dayOffset: integer, see above
     - hasTime: TRUE if the user explicitly mentioned a specific time ("at 3pm", "tonight", "first thing in the morning"). FALSE if they didn't — do NOT invent a time. Tasks with hasTime=false render at the bottom of the day with no time label.
     - startHour, startMinute: only meaningful when hasTime is true. When hasTime is false, set both to 0 (they're ignored).
-    - durationMinutes: realistic numbers (estimate duration if not given)
+    - durationMinutes: integer minutes if the user mentioned a length ("30 min focus block", "1 hour workout"). Use 0 when no duration is implied — do NOT invent one.
     - notes: 1–2 sentences on how to approach it
     - subtasks: 1–4 short actionable steps ONLY for tasks that benefit from breakdown (deep focus / creative work). Empty array for everything else.
 
     ALLOWED VALUES:
     - category: "work" | "personal" | "health" | "admin" | "focus" | "create" | "energize" | "windDown"
     - priority: "low" | "medium" | "high"
-    - section: "focusTime" | "create" | "getThingsDone" | "energize" | "windDown"
-
-    SECTION GUIDANCE:
-    - focusTime: deep, uninterrupted thinking work
-    - create: making something new (writing, design, content)
-    - getThingsDone: admin, errands, meetings, quick wins
-    - energize: meals, breaks, exercise (only if the user mentioned them)
-    - windDown: low-effort, evening tasks, calls, reading
     """
 }
 
@@ -376,7 +360,6 @@ private struct JSONSchema: Encodable {
     static let dayPlan: JSONSchema = {
         let categoryEnum = ["work", "personal", "health", "admin", "focus", "create", "energize", "windDown"]
         let priorityEnum = ["low", "medium", "high"]
-        let sectionEnum  = ["focusTime", "create", "getThingsDone", "energize", "windDown"]
 
         let task = JSONSchema(
             type: .object,
@@ -384,16 +367,15 @@ private struct JSONSchema: Encodable {
                 "title":           JSONSchema(type: .string),
                 "category":        JSONSchema(type: .string, enum: categoryEnum),
                 "priority":        JSONSchema(type: .string, enum: priorityEnum),
-                "section":         JSONSchema(type: .string, enum: sectionEnum),
                 "dayOffset":       JSONSchema(type: .integer, minimum: 0, maximum: 90),
                 "hasTime":         JSONSchema(type: .boolean),
                 "startHour":       JSONSchema(type: .integer, minimum: 0, maximum: 23),
                 "startMinute":     JSONSchema(type: .integer, minimum: 0, maximum: 59),
-                "durationMinutes": JSONSchema(type: .integer, minimum: 5, maximum: 480),
+                "durationMinutes": JSONSchema(type: .integer, minimum: 0, maximum: 480),
                 "notes":           JSONSchema(type: .string),
                 "subtasks":        JSONSchema(type: .array, items: SchemaBox(JSONSchema(type: .string)))
             ],
-            required: ["title", "category", "priority", "section", "dayOffset", "hasTime", "startHour", "startMinute", "durationMinutes", "notes", "subtasks"],
+            required: ["title", "category", "priority", "dayOffset", "hasTime", "startHour", "startMinute", "durationMinutes", "notes", "subtasks"],
             additionalProperties: false
         )
 
@@ -421,7 +403,6 @@ private struct DayPlanJSON: Decodable {
         let title: String
         let category: String
         let priority: String
-        let section: String
         let dayOffset: Int
         let hasTime: Bool
         let startHour: Int
@@ -438,7 +419,6 @@ private struct DayPlanJSON: Decodable {
         return tasks.map { t in
             let category = TaskCategory(rawValue: t.category) ?? .work
             let priority = TaskPriority(rawValue: t.priority) ?? .medium
-            let section  = DaySectionKind(rawValue: t.section) ?? .getThingsDone
             let day = cal.date(
                 byAdding: .day,
                 value: max(0, min(90, t.dayOffset)),
@@ -455,10 +435,9 @@ private struct DayPlanJSON: Decodable {
                 title: t.title,
                 category: category,
                 priority: priority,
-                section: section,
                 startTime: startTime,
                 hasTime: t.hasTime,
-                durationMinutes: max(5, t.durationMinutes),
+                durationMinutes: max(0, min(480, t.durationMinutes)),
                 notes: t.notes.isEmpty ? nil : t.notes,
                 subtasks: t.subtasks.map { Subtask(title: $0) }
             )

@@ -12,11 +12,12 @@ struct PlanTask: Identifiable, Hashable {
     var title: String
     var category: TaskCategory
     var priority: TaskPriority
-    var section: DaySectionKind
     var startTime: Date
     /// `false` means the user didn't specify a time — the task floats and
     /// renders without a time label.
     var hasTime: Bool
+    /// `0` means no duration — task is open-ended. UI hides the duration label
+    /// in that case and computed `endTime` collapses to `startTime`.
     var durationMinutes: Int
     var notes: String?
     var subtasks: [Subtask]
@@ -27,10 +28,9 @@ struct PlanTask: Identifiable, Hashable {
         title: String,
         category: TaskCategory,
         priority: TaskPriority = .medium,
-        section: DaySectionKind,
         startTime: Date,
         hasTime: Bool = true,
-        durationMinutes: Int,
+        durationMinutes: Int = 0,
         notes: String? = nil,
         subtasks: [Subtask] = [],
         isCompleted: Bool = false
@@ -39,7 +39,6 @@ struct PlanTask: Identifiable, Hashable {
         self.title = title
         self.category = category
         self.priority = priority
-        self.section = section
         self.startTime = startTime
         self.hasTime = hasTime
         self.durationMinutes = durationMinutes
@@ -48,11 +47,15 @@ struct PlanTask: Identifiable, Hashable {
         self.isCompleted = isCompleted
     }
 
+    var hasDuration: Bool { durationMinutes > 0 }
+
     var endTime: Date {
         startTime.addingTimeInterval(TimeInterval(durationMinutes * 60))
     }
 
-    var durationLabel: String {
+    /// `nil` when the task has no duration set.
+    var durationLabel: String? {
+        guard hasDuration else { return nil }
         if durationMinutes < 60 {
             return "\(durationMinutes)m"
         }
@@ -77,7 +80,9 @@ struct PlanTask: Identifiable, Hashable {
     var timeRangeLabel: String {
         let formatter = DateFormatter()
         formatter.dateFormat = "h:mm a"
-        return "\(formatter.string(from: startTime)) – \(formatter.string(from: endTime))"
+        let start = formatter.string(from: startTime)
+        guard hasDuration else { return start }
+        return "\(start) – \(formatter.string(from: endTime))"
     }
 }
 

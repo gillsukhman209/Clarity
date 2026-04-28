@@ -14,6 +14,7 @@ struct MacTaskDetailPanel: View {
     var onComplete: () -> Void = {}
 
     @Environment(TaskStore.self) private var store
+    @State private var showEdit: Bool = false
 
     var body: some View {
         Group {
@@ -26,9 +27,32 @@ struct MacTaskDetailPanel: View {
         .frame(maxHeight: .infinity, alignment: .top)
         .background(AppColors.surface)
         .overlay(alignment: .topTrailing) {
-            closeButton
-                .padding(AppSpacing.sm)
+            HStack(spacing: 6) {
+                editButton
+                closeButton
+            }
+            .padding(AppSpacing.sm)
         }
+        .sheet(isPresented: $showEdit) {
+            TaskEditView(taskID: taskID) { showEdit = false }
+                .environment(store)
+        }
+    }
+
+    private var editButton: some View {
+        HoverScaleButton(action: { showEdit = true }, hoverScale: 1.08) {
+            Image(systemName: "pencil")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(AppColors.textSecondary)
+                .frame(width: 24, height: 24)
+                .background(
+                    Circle().fill(AppColors.background)
+                )
+                .overlay(
+                    Circle().stroke(AppColors.border, lineWidth: 1)
+                )
+        }
+        .accessibilityLabel("Edit task")
     }
 
     private var closeButton: some View {
@@ -116,9 +140,11 @@ struct MacTaskDetailPanel: View {
                 Text(task.hasTime ? task.timeRangeLabel : "Anytime")
                     .font(AppTypography.bodyMedium)
                     .foregroundStyle(AppColors.textPrimary)
-                Text("(\(task.durationMinutes) minutes)")
-                    .font(AppTypography.body)
-                    .foregroundStyle(AppColors.textSecondary)
+                if task.hasDuration {
+                    Text("(\(task.durationMinutes) minutes)")
+                        .font(AppTypography.body)
+                        .foregroundStyle(AppColors.textSecondary)
+                }
             }
             PriorityBadge(priority: task.priority)
         }

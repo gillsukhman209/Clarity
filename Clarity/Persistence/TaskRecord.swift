@@ -16,11 +16,11 @@ final class TaskRecord {
     var title: String = ""
     var categoryRaw: String = "work"
     var priorityRaw: String = "medium"
-    var sectionRaw: String = "getThingsDone"
     var startTime: Date = Date()
     /// Default `true` keeps every existing record meaningful after the schema migration.
     var hasTime: Bool = true
-    var durationMinutes: Int = 30
+    /// `0` means no specific duration — the task is open-ended.
+    var durationMinutes: Int = 0
     var notes: String? = nil
     var isCompleted: Bool = false
 
@@ -32,10 +32,9 @@ final class TaskRecord {
         title: String = "",
         category: TaskCategory = .work,
         priority: TaskPriority = .medium,
-        section: DaySectionKind = .getThingsDone,
         startTime: Date = Date(),
         hasTime: Bool = true,
-        durationMinutes: Int = 30,
+        durationMinutes: Int = 0,
         notes: String? = nil,
         isCompleted: Bool = false,
         subtasks: [SubtaskRecord] = []
@@ -44,7 +43,6 @@ final class TaskRecord {
         self.title = title
         self.categoryRaw = category.rawValue
         self.priorityRaw = priority.rawValue
-        self.sectionRaw = section.rawValue
         self.startTime = startTime
         self.hasTime = hasTime
         self.durationMinutes = durationMinutes
@@ -55,7 +53,6 @@ final class TaskRecord {
 
     var category: TaskCategory { TaskCategory(rawValue: categoryRaw) ?? .work }
     var priority: TaskPriority { TaskPriority(rawValue: priorityRaw) ?? .medium }
-    var section: DaySectionKind { DaySectionKind(rawValue: sectionRaw) ?? .getThingsDone }
 
     func toDomain() -> PlanTask {
         let subs = (subtasks ?? [])
@@ -66,7 +63,6 @@ final class TaskRecord {
             title: title,
             category: category,
             priority: priority,
-            section: section,
             startTime: startTime,
             hasTime: hasTime,
             durationMinutes: durationMinutes,

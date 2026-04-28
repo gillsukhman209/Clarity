@@ -95,16 +95,10 @@ final class NotificationsManager {
     }
 
     private func bodyText(for task: PlanTask, leadMinutes lead: Int) -> String {
-        let when = lead == 0
-            ? "Starts now"
-            : "Starts in \(lead) min"
-        let mins = task.durationMinutes
-        if mins < 60 {
-            return "\(when) · \(mins) min · \(task.category.title)"
+        let when = lead == 0 ? "Starts now" : "Starts in \(lead) min"
+        guard let duration = task.durationLabel else {
+            return "\(when) · \(task.category.title)"
         }
-        let h = mins / 60
-        let m = mins % 60
-        let duration = m == 0 ? "\(h)h" : "\(h)h \(m)m"
         return "\(when) · \(duration) · \(task.category.title)"
     }
 }

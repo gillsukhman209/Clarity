@@ -13,13 +13,24 @@ struct TaskDetailView: View {
     var onClose: () -> Void = {}
 
     @Environment(TaskStore.self) private var store
+    @State private var showEdit: Bool = false
 
     var body: some View {
-        if let task = store.task(with: taskID) {
-            content(for: task)
-        } else {
-            // Task was deleted while open — fall back to a tidy empty state.
-            missing
+        Group {
+            if let task = store.task(with: taskID) {
+                content(for: task)
+            } else {
+                // Task was deleted while open — fall back to a tidy empty state.
+                missing
+            }
+        }
+        .sheet(isPresented: $showEdit) {
+            TaskEditView(taskID: taskID) { showEdit = false }
+                .environment(store)
+                #if os(iOS)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                #endif
         }
     }
 
@@ -69,7 +80,7 @@ struct TaskDetailView: View {
                 .font(AppTypography.titleSmall)
                 .foregroundStyle(AppColors.textPrimary)
             Spacer()
-            Button("Edit") {}
+            Button("Edit") { showEdit = true }
                 .font(AppTypography.bodyMedium)
                 .foregroundStyle(AppColors.accent)
         }
@@ -106,9 +117,9 @@ struct TaskDetailView: View {
         AppCard(padding: 0, cornerRadius: AppRadius.large) {
             VStack(spacing: 0) {
                 detailRow(label: "Duration", value: AnyView(
-                    Text("\(task.durationMinutes) minutes")
+                    Text(task.durationLabel.map { "\($0)" } ?? "—")
                         .font(AppTypography.bodyMedium)
-                        .foregroundStyle(AppColors.textPrimary)
+                        .foregroundStyle(task.hasDuration ? AppColors.textPrimary : AppColors.textTertiary)
                 ))
                 Divider().background(AppColors.divider)
                 detailRow(label: "Start Time", value: AnyView(

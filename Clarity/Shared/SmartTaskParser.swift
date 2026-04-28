@@ -16,9 +16,9 @@ struct ParsedQuickTask {
     /// `hasTime = false` and anchor the task to today (or today + dayOffset).
     var startTime: Date?
     var title: String
+    /// `0` means the parser couldn't infer a duration — leave it open-ended.
     var durationMinutes: Int
     var category: TaskCategory
-    var section: DaySectionKind
 }
 
 enum SmartTaskParser {
@@ -28,7 +28,7 @@ enum SmartTaskParser {
         guard !trimmed.isEmpty else {
             return ParsedQuickTask(
                 startTime: nil, title: "New task",
-                durationMinutes: 30, category: .personal, section: .getThingsDone
+                durationMinutes: 0, category: .personal
             )
         }
 
@@ -67,7 +67,9 @@ enum SmartTaskParser {
         }
 
         // 3. Detect explicit duration ("30 min", "1 hour", "for 90m").
-        var durationMinutes: Int = 30
+        // Default `0` = no duration set — task is open-ended unless the user
+        // says otherwise.
+        var durationMinutes: Int = 0
         if let regex = try? NSRegularExpression(
             pattern: #"\b(\d{1,3})\s*(minutes?|mins?|m|hours?|hrs?|h)\b"#,
             options: .caseInsensitive
@@ -90,9 +92,8 @@ enum SmartTaskParser {
         // 4. Tidy up: collapse whitespace + drop trailing connectors.
         let title = cleanTitle(working).ifEmpty(rawInput)
 
-        // 5. Infer category + section from keywords.
+        // 5. Infer category from keywords.
         let category = inferCategory(from: title)
-        let section  = inferSection(for: category, title: title)
 
         // 6. If we have a start time but no time was actually stated (e.g. "tomorrow"),
         // discard the time-of-day component and anchor the task to that day.
@@ -101,11 +102,10 @@ enum SmartTaskParser {
         }
 
         return ParsedQuickTask(
-            startTime: hasExplicitTime ? startTime : startTime,
+            startTime: startTime,
             title: title,
             durationMinutes: durationMinutes,
-            category: category,
-            section: section
+            category: category
         )
     }
 
@@ -228,15 +228,6 @@ enum SmartTaskParser {
         return .personal
     }
 
-    private static func inferSection(for category: TaskCategory, title: String) -> DaySectionKind {
-        switch category {
-        case .focus:    return .focusTime
-        case .create:   return .create
-        case .work, .admin, .personal: return .getThingsDone
-        case .energize, .health:       return .energize
-        case .windDown:                return .windDown
-        }
-    }
 }
 
 private extension String {

@@ -19,7 +19,7 @@ final class TaskStore {
     @ObservationIgnored private var remoteChangeTask: Task<Void, Never>?
 
     private(set) var tasks: [PlanTask] = []
-    private(set) var daySections: [DaySection] = []
+    private(set) var categoryGroups: [CategoryGroup] = []
     /// The most recently deleted task, kept around briefly so the UI can
     /// offer an Undo toast. Cleared after 5 seconds or on the next undo.
     private(set) var recentlyDeleted: PlanTask?
@@ -81,18 +81,16 @@ final class TaskStore {
             }
     }
 
-    /// `daySections` filtered to the given date.
-    func daySections(on date: Date) -> [DaySection] {
-        let order: [DaySectionKind] = [
-            .focusTime, .create, .getThingsDone, .energize, .windDown
-        ]
-        var grouped: [DaySectionKind: [PlanTask]] = [:]
+    /// Groups the day's tasks by category in `TaskCategory.allCases` order.
+    /// Empty buckets are dropped so the UI only renders categories with work.
+    func categoryGroups(on date: Date) -> [CategoryGroup] {
+        var grouped: [TaskCategory: [PlanTask]] = [:]
         for task in tasks(on: date) {
-            grouped[task.section, default: []].append(task)
+            grouped[task.category, default: []].append(task)
         }
-        return order.compactMap { kind in
-            guard let bucket = grouped[kind], !bucket.isEmpty else { return nil }
-            return DaySection(kind: kind, tasks: bucket)
+        return TaskCategory.allCases.compactMap { cat in
+            guard let bucket = grouped[cat], !bucket.isEmpty else { return nil }
+            return CategoryGroup(category: cat, tasks: bucket)
         }
     }
 
@@ -180,9 +178,8 @@ final class TaskStore {
     func update(_ task: PlanTask) {
         guard let record = fetchRecord(task.id) else { return }
         record.title = task.title
-        record.category = task.category
-        record.priority = task.priority
-        record.section = task.section
+        record.categoryRaw = task.category.rawValue
+        record.priorityRaw = task.priority.rawValue
         record.startTime = task.startTime
         record.hasTime = task.hasTime
         record.durationMinutes = task.durationMinutes
@@ -227,16 +224,13 @@ final class TaskStore {
         let records = (try? context.fetch(descriptor)) ?? []
         tasks = records.map { $0.toDomain() }
 
-        let order: [DaySectionKind] = [
-            .focusTime, .create, .getThingsDone, .energize, .windDown
-        ]
-        var grouped: [DaySectionKind: [PlanTask]] = [:]
+        var grouped: [TaskCategory: [PlanTask]] = [:]
         for record in records {
-            grouped[record.section, default: []].append(record.toDomain())
+            grouped[record.category, default: []].append(record.toDomain())
         }
-        daySections = order.compactMap { kind in
-            guard let bucket = grouped[kind], !bucket.isEmpty else { return nil }
-            return DaySection(kind: kind, tasks: bucket)
+        categoryGroups = TaskCategory.allCases.compactMap { cat in
+            guard let bucket = grouped[cat], !bucket.isEmpty else { return nil }
+            return CategoryGroup(category: cat, tasks: bucket)
         }
 
         notifications?.sync(with: tasks)
@@ -277,7 +271,6 @@ final class TaskStore {
             title: plan.title,
             category: plan.category,
             priority: plan.priority,
-            section: plan.section,
             startTime: plan.startTime,
             hasTime: plan.hasTime,
             durationMinutes: plan.durationMinutes,

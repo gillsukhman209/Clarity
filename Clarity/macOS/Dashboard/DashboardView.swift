@@ -21,8 +21,8 @@ struct DashboardView: View {
     /// Toggle off to flatten the day into one chronological list.
     @AppStorage("dashboardGroupBySection") private var groupBySection: Bool = true
 
-    private var visibleSections: [DaySection] {
-        store.daySections(on: currentDate)
+    private var visibleGroups: [CategoryGroup] {
+        store.categoryGroups(on: currentDate)
     }
 
     /// Tasks for the visible day. Flat-mode display reads this directly,
@@ -279,12 +279,12 @@ struct DashboardView: View {
     private var taskList: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: AppSpacing.xl) {
-                ForEach(visibleSections) { section in
+                ForEach(visibleGroups) { group in
                     VStack(alignment: .leading, spacing: AppSpacing.sm) {
-                        DaySectionHeader(section: section)
+                        CategoryGroupHeader(group: group)
 
                         VStack(spacing: AppSpacing.xs) {
-                            ForEach(section.tasks) { task in
+                            ForEach(group.tasks) { task in
                                 SwipeableRow(
                                     onTap: { selectedTaskID = task.id },
                                     leadingAction: SwipeAction(
