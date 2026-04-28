@@ -17,9 +17,19 @@ struct DashboardView: View {
 
     @Environment(TaskStore.self) private var store
     @State private var showQuickAdd: Bool = false
+    /// Persisted across launches. Default ON (grouped by section, current behavior).
+    /// Toggle off to flatten the day into one chronological list.
+    @AppStorage("dashboardGroupBySection") private var groupBySection: Bool = true
 
     private var visibleSections: [DaySection] {
         store.daySections(on: currentDate)
+    }
+
+    /// Tasks for the visible day. Flat-mode display reads this directly,
+    /// so the sort here is what guarantees 9 AM appears above 1 PM.
+    private var visibleTasks: [PlanTask] {
+        store.tasks(on: currentDate)
+            .sorted { $0.startTime < $1.startTime }
     }
 
     var body: some View {
@@ -34,10 +44,12 @@ struct DashboardView: View {
                     .padding(.top, AppSpacing.lg)
                     .padding(.bottom, AppSpacing.lg)
 
-                if visibleSections.isEmpty {
+                if visibleTasks.isEmpty {
                     emptyState
-                } else {
+                } else if groupBySection {
                     taskList
+                } else {
+                    flatTaskList
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -117,8 +129,26 @@ struct DashboardView: View {
             Spacer()
             searchField
             addTaskButton
+            sortToggle
             insightsToggle
         }
+    }
+
+    private var sortToggle: some View {
+        HoverScaleButton(action: { groupBySection.toggle() }, hoverScale: 1.06) {
+            Image(systemName: groupBySection ? "rectangle.stack" : "list.bullet")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(groupBySection ? AppColors.accent : AppColors.textSecondary)
+                .frame(width: 32, height: 32)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(groupBySection ? AppColors.accentSoft.opacity(0.45) : AppColors.surface)
+                )
+                .overlay(
+                    Capsule(style: .continuous).stroke(AppColors.border, lineWidth: 1)
+                )
+        }
+        .accessibilityLabel(groupBySection ? "Switch to time-sorted view" : "Switch to grouped view")
     }
 
     private var todayNavigator: some View {
@@ -325,6 +355,55 @@ struct DashboardView: View {
                 .foregroundStyle(AppColors.textTertiary)
                 .frame(width: 72, alignment: .leading)
             TaskBlock(task: task, isSelected: task.id == selectedTaskID)
+        }
+    }
+
+    // MARK: - Flat task list (sorted by time, no section grouping)
+    private var flatTaskList: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: AppSpacing.xs) {
+                ForEach(visibleTasks) { task in
+                    SwipeableRow(
+                        onTap: { selectedTaskID = task.id },
+                        leadingAction: SwipeAction(
+                            symbol: task.isCompleted ? "arrow.uturn.backward" : "checkmark",
+                            title: task.isCompleted ? "Undo" : "Done",
+                            color: AppColors.Priority.lowInk,
+                            action: { store.toggleComplete(task.id) }
+                        ),
+                        trailingAction: SwipeAction(
+                            symbol: "trash",
+                            title: "Delete",
+                            color: AppColors.Priority.highInk,
+                            isDestructive: true,
+                            action: {
+                                if selectedTaskID == task.id { selectedTaskID = nil }
+                                store.delete(task.id)
+                            }
+                        )
+                    ) {
+                        taskRow(task)
+                            .background(AppColors.background)
+                    }
+                    .contextMenu {
+                        Button {
+                            store.toggleComplete(task.id)
+                        } label: {
+                            Label(task.isCompleted ? "Mark incomplete" : "Mark complete",
+                                  systemImage: task.isCompleted ? "arrow.uturn.backward" : "checkmark.circle")
+                        }
+                        Divider()
+                        Button(role: .destructive) {
+                            if selectedTaskID == task.id { selectedTaskID = nil }
+                            store.delete(task.id)
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, AppSpacing.xl)
+            .padding(.bottom, AppSpacing.xl)
         }
     }
 }
