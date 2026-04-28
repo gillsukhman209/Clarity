@@ -3,7 +3,8 @@
 //  Clarity
 //
 //  A single day in the full-page calendar grid. Shows the day number plus
-//  a few task chips so the user can see at a glance what's on each day.
+//  a few task chips. The parent caps how many chips can show via
+//  `maxVisibleChips`, so quiet weeks render small and busy weeks stay legible.
 //
 
 import SwiftUI
@@ -14,11 +15,10 @@ struct CalendarDayCell: View {
     let isInCurrentMonth: Bool
     let isSelected: Bool
     let isToday: Bool
-
-    private let maxVisibleChips = 3
+    var maxVisibleChips: Int = 3
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 3) {
             dayNumberRow
             chipsStack
             Spacer(minLength: 0)
@@ -41,7 +41,7 @@ struct CalendarDayCell: View {
     // MARK: - Pieces
 
     private var dayNumberRow: some View {
-        HStack {
+        HStack(spacing: 4) {
             ZStack {
                 if isToday {
                     Circle()
@@ -49,13 +49,13 @@ struct CalendarDayCell: View {
                         .frame(width: 22, height: 22)
                 }
                 Text("\(Calendar.current.component(.day, from: date))")
-                    .font(.system(size: 12, weight: isToday ? .bold : .semibold, design: .rounded))
+                    .font(.system(size: 13, weight: isToday ? .bold : .semibold, design: .rounded))
                     .foregroundStyle(isToday ? Color.white : AppColors.textPrimary)
             }
             Spacer()
-            if tasks.count > maxVisibleChips {
+            if maxVisibleChips > 0, tasks.count > maxVisibleChips {
                 Text("+\(tasks.count - maxVisibleChips)")
-                    .font(.system(size: 9, weight: .semibold))
+                    .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(AppColors.textTertiary)
             }
         }
@@ -63,9 +63,11 @@ struct CalendarDayCell: View {
 
     @ViewBuilder
     private var chipsStack: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            ForEach(tasks.prefix(maxVisibleChips)) { task in
-                chip(for: task)
+        if maxVisibleChips > 0 {
+            VStack(alignment: .leading, spacing: 2) {
+                ForEach(tasks.prefix(maxVisibleChips)) { task in
+                    chip(for: task)
+                }
             }
         }
     }
@@ -74,15 +76,15 @@ struct CalendarDayCell: View {
         HStack(spacing: 4) {
             RoundedRectangle(cornerRadius: 1.5, style: .continuous)
                 .fill(task.category.inkColor)
-                .frame(width: 2.5, height: 10)
+                .frame(width: 3, height: 12)
             Text(task.title)
-                .font(.system(size: 9.5, weight: .medium))
+                .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(AppColors.textSecondary)
                 .lineLimit(1)
                 .strikethrough(task.isCompleted, color: AppColors.textTertiary)
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 4)
+        .padding(.horizontal, 5)
         .padding(.vertical, 2)
         .background(
             RoundedRectangle(cornerRadius: 4, style: .continuous)

@@ -20,6 +20,10 @@ final class TaskStore {
 
     private(set) var tasks: [PlanTask] = []
     private(set) var daySections: [DaySection] = []
+    /// The most recently deleted task, kept around briefly so the UI can
+    /// offer an Undo toast. Cleared after 5 seconds or on the next undo.
+    private(set) var recentlyDeleted: PlanTask?
+    @ObservationIgnored private var undoExpiryTask: Task<Void, Never>?
 
     init(context: ModelContext, notifications: NotificationsManager? = nil) {
         self.context = context
@@ -99,9 +103,39 @@ final class TaskStore {
 
     func delete(_ taskID: UUID) {
         guard let record = fetchRecord(taskID) else { return }
+        let snapshot = record.toDomain()
         context.delete(record)
         save()
         refresh()
+        recentlyDeleted = snapshot
+        scheduleUndoExpiry(for: snapshot.id)
+    }
+
+    /// Restore the most recently deleted task. Called by the Undo toast.
+    func undoLastDelete() {
+        guard let task = recentlyDeleted else { return }
+        undoExpiryTask?.cancel()
+        recentlyDeleted = nil
+        append([task])
+    }
+
+    /// Dismiss the toast manually without restoring (e.g. user tapped away).
+    func clearRecentlyDeleted() {
+        undoExpiryTask?.cancel()
+        recentlyDeleted = nil
+    }
+
+    private func scheduleUndoExpiry(for id: UUID) {
+        undoExpiryTask?.cancel()
+        undoExpiryTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(5))
+            await MainActor.run {
+                guard let self else { return }
+                if self.recentlyDeleted?.id == id {
+                    self.recentlyDeleted = nil
+                }
+            }
+        }
     }
 
     /// Wipes every task on this device. With CloudKit on, the deletion

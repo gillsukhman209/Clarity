@@ -26,6 +26,21 @@ struct ContentView: View {
                         VoiceReadyBanner(visible: showReadyBanner)
                             .padding(.top, 8)
                     }
+                    .overlay(alignment: .bottom) {
+                        if store.recentlyDeleted != nil {
+                            UndoToast {
+                                store.undoLastDelete()
+                            }
+                            #if os(iOS)
+                            .padding(.bottom, 70)
+                            #else
+                            .padding(.bottom, 24)
+                            #endif
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                        }
+                    }
+                    .animation(.spring(response: 0.4, dampingFraction: 0.85),
+                               value: store.recentlyDeleted?.id)
             } else {
                 AppColors.background.ignoresSafeArea()
             }
