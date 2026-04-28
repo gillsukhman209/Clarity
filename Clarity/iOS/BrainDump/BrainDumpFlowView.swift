@@ -15,6 +15,10 @@ enum BrainDumpStep: Int {
 }
 
 struct BrainDumpFlowView: View {
+    /// When set, the brain dump becomes project-scoped: every generated task
+    /// gets this project assigned and the day plan is left alone.
+    var projectID: UUID? = nil
+
     @Environment(\.dismiss) private var dismiss
     @State private var step: BrainDumpStep = .capture
     @State private var recordingURL: URL?
@@ -49,6 +53,7 @@ struct BrainDumpFlowView: View {
             case .building:
                 BuildingPlanView(
                     transcript: transcript,
+                    projectID: projectID,
                     onCancel: { dismiss() },
                     onDone: { dismiss() }
                 )

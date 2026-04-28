@@ -23,9 +23,14 @@ final class TaskRecord {
     var durationMinutes: Int = 0
     var notes: String? = nil
     var isCompleted: Bool = false
+    /// Kanban column on a project board. Always `done` if the task is completed.
+    var boardStatusRaw: String = "upcoming"
 
     @Relationship(deleteRule: .cascade, inverse: \SubtaskRecord.task)
     var subtasks: [SubtaskRecord]? = []
+
+    /// Optional parent project. The inverse lives on `ProjectRecord.tasks`.
+    var project: ProjectRecord? = nil
 
     init(
         id: UUID = UUID(),
@@ -37,7 +42,9 @@ final class TaskRecord {
         durationMinutes: Int = 0,
         notes: String? = nil,
         isCompleted: Bool = false,
-        subtasks: [SubtaskRecord] = []
+        boardStatus: TaskBoardStatus = .upcoming,
+        subtasks: [SubtaskRecord] = [],
+        project: ProjectRecord? = nil
     ) {
         self.id = id
         self.title = title
@@ -48,11 +55,14 @@ final class TaskRecord {
         self.durationMinutes = durationMinutes
         self.notes = notes
         self.isCompleted = isCompleted
+        self.boardStatusRaw = (isCompleted ? TaskBoardStatus.done : boardStatus).rawValue
         self.subtasks = subtasks
+        self.project = project
     }
 
     var category: TaskCategory { TaskCategory(rawValue: categoryRaw) ?? .work }
     var priority: TaskPriority { TaskPriority(rawValue: priorityRaw) ?? .medium }
+    var boardStatus: TaskBoardStatus { TaskBoardStatus(rawValue: boardStatusRaw) ?? .upcoming }
 
     func toDomain() -> PlanTask {
         let subs = (subtasks ?? [])
@@ -68,7 +78,9 @@ final class TaskRecord {
             durationMinutes: durationMinutes,
             notes: notes,
             subtasks: subs,
-            isCompleted: isCompleted
+            isCompleted: isCompleted,
+            projectID: project?.id,
+            boardStatus: boardStatus
         )
     }
 }

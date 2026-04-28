@@ -13,6 +13,7 @@ import SwiftUI
 enum MacMainView: Equatable {
     case day
     case calendar
+    case projects
 }
 
 struct MacRootView: View {
@@ -81,6 +82,8 @@ struct MacRootView: View {
                 currentDate: $currentDate,
                 onDaySelected: { mainView = .day }
             )
+        case .projects:
+            ProjectListView()
         }
     }
 }

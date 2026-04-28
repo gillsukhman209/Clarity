@@ -23,6 +23,7 @@ struct TaskEditView: View {
     @State private var hasTime: Bool = true
     @State private var startDate: Date = Date()
     @State private var durationMinutes: Int = 0
+    @State private var projectID: UUID? = nil
 
     @State private var showDatePopover: Bool = false
     @State private var showTimePopover: Bool = false
@@ -65,6 +66,9 @@ struct TaskEditView: View {
                     priorityRow
                     whenRow
                     durationRow
+                    if !store.projects.isEmpty {
+                        projectRow
+                    }
                     notesField
                 }
                 .padding(.horizontal, AppSpacing.lg)
@@ -357,6 +361,52 @@ struct TaskEditView: View {
         return m == 0 ? "\(h)h" : "\(h)h\(m)"
     }
 
+    // MARK: - Project picker
+    private var projectRow: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            fieldLabel("Project")
+            FlowLayout(spacing: 8, lineSpacing: 8) {
+                projectChip(name: "None", icon: "circle.dashed", tint: AppColors.textSecondary, isOn: projectID == nil) {
+                    projectID = nil
+                }
+                ForEach(store.projects) { p in
+                    projectChip(
+                        name: p.name,
+                        icon: p.iconSymbol,
+                        tint: p.accentColor,
+                        isOn: projectID == p.id
+                    ) {
+                        projectID = p.id
+                    }
+                }
+            }
+        }
+    }
+
+    private func projectChip(name: String, icon: String, tint: Color, isOn: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 11, weight: .semibold))
+                Text(name)
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .lineLimit(1)
+            }
+            .foregroundStyle(isOn ? tint : AppColors.textSecondary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(isOn ? tint.opacity(0.18) : AppColors.surface)
+            )
+            .overlay(
+                Capsule(style: .continuous)
+                    .stroke(isOn ? tint.opacity(0.45) : AppColors.border.opacity(0.7), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
     // MARK: - Notes
     private var notesField: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -445,6 +495,7 @@ struct TaskEditView: View {
         hasTime = task.hasTime
         startDate = task.startTime
         durationMinutes = task.durationMinutes
+        projectID = task.projectID
         loaded = true
     }
 
@@ -472,6 +523,7 @@ struct TaskEditView: View {
         updated.hasTime = hasTime
         updated.startTime = resolvedStart
         updated.durationMinutes = durationMinutes
+        updated.projectID = projectID
 
         store.update(updated)
         close()

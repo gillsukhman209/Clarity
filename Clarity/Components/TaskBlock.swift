@@ -18,7 +18,13 @@ struct TaskBlock: View {
     let task: PlanTask
     var isSelected: Bool = false
 
+    @Environment(TaskStore.self) private var store
     @State private var isHovered: Bool = false
+
+    private var project: Project? {
+        guard let id = task.projectID else { return nil }
+        return store.project(with: id)
+    }
 
     var body: some View {
         HStack(spacing: AppSpacing.sm) {
@@ -28,11 +34,16 @@ struct TaskBlock: View {
                 .frame(width: 4)
                 .padding(.vertical, 6)
 
-            Text(task.title)
-                .font(AppTypography.bodySemibold)
-                .foregroundStyle(AppColors.textPrimary)
-                .strikethrough(task.isCompleted, color: AppColors.textTertiary)
-                .lineLimit(1)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(task.title)
+                    .font(AppTypography.bodySemibold)
+                    .foregroundStyle(AppColors.textPrimary)
+                    .strikethrough(task.isCompleted, color: AppColors.textTertiary)
+                    .lineLimit(1)
+                if let project {
+                    projectChip(project)
+                }
+            }
 
             Spacer(minLength: AppSpacing.sm)
 
@@ -66,6 +77,25 @@ struct TaskBlock: View {
         .animation(.easeInOut(duration: 0.2), value: task.isCompleted)
         .animation(.easeInOut(duration: 0.2), value: isSelected)
         .onHover { isHovered = $0 }
+    }
+
+    // MARK: - Project chip
+
+    private func projectChip(_ project: Project) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: project.iconSymbol)
+                .font(.system(size: 8, weight: .semibold))
+            Text(project.name)
+                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                .lineLimit(1)
+        }
+        .foregroundStyle(project.accentColor)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(
+            Capsule(style: .continuous)
+                .fill(project.accentColor.opacity(0.15))
+        )
     }
 
     // MARK: - Countdown

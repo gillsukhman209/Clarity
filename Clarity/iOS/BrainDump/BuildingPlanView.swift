@@ -10,6 +10,9 @@ import SwiftUI
 
 struct BuildingPlanView: View {
     var transcript: String = ""
+    /// When non-nil, the brain dump runs in append-only mode and stamps every
+    /// generated task with this project. Used by the per-project brain dump.
+    var projectID: UUID? = nil
     var onCancel: () -> Void = {}
     var onDone: () -> Void = {}
 
@@ -51,9 +54,24 @@ struct BuildingPlanView: View {
     }
 
     private func runGeneration() async {
-        await generator.generate(from: transcript, existing: store.tasks)
-        if generator.error == nil, !generator.tasks.isEmpty {
-            store.replaceAll(with: generator.tasks)
+        if let projectID {
+            // Project-scoped brain dump: never replan the whole day, just
+            // append the generated tasks tagged with this project.
+            await generator.generate(from: transcript, mode: .quickAdd)
+            if generator.error == nil, !generator.tasks.isEmpty {
+                let stamped = generator.tasks.map { t -> PlanTask in
+                    var copy = t
+                    copy.projectID = projectID
+                    copy.boardStatus = .upcoming
+                    return copy
+                }
+                store.append(stamped)
+            }
+        } else {
+            await generator.generate(from: transcript, existing: store.tasks)
+            if generator.error == nil, !generator.tasks.isEmpty {
+                store.replaceAll(with: generator.tasks)
+            }
         }
     }
 

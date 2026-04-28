@@ -119,5 +119,5 @@ private struct VoiceReadyBanner: View {
 
 #Preview {
     ContentView()
-        .modelContainer(for: [TaskRecord.self, SubtaskRecord.self], inMemory: true)
+        .modelContainer(for: [TaskRecord.self, SubtaskRecord.self, ProjectRecord.self], inMemory: true)
 }

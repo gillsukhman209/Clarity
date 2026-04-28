@@ -22,6 +22,11 @@ struct PlanTask: Identifiable, Hashable {
     var notes: String?
     var subtasks: [Subtask]
     var isCompleted: Bool
+    /// `nil` for free-floating tasks; otherwise the parent project's id.
+    var projectID: UUID?
+    /// Which kanban column this task lives in when shown on a project board.
+    /// Stays in sync with `isCompleted` (`.done` ⇔ completed).
+    var boardStatus: TaskBoardStatus
 
     init(
         id: UUID = UUID(),
@@ -33,7 +38,9 @@ struct PlanTask: Identifiable, Hashable {
         durationMinutes: Int = 0,
         notes: String? = nil,
         subtasks: [Subtask] = [],
-        isCompleted: Bool = false
+        isCompleted: Bool = false,
+        projectID: UUID? = nil,
+        boardStatus: TaskBoardStatus = .upcoming
     ) {
         self.id = id
         self.title = title
@@ -45,6 +52,8 @@ struct PlanTask: Identifiable, Hashable {
         self.notes = notes
         self.subtasks = subtasks
         self.isCompleted = isCompleted
+        self.projectID = projectID
+        self.boardStatus = isCompleted ? .done : boardStatus
     }
 
     var hasDuration: Bool { durationMinutes > 0 }

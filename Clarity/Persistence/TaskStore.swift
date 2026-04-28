@@ -20,6 +20,9 @@ final class TaskStore {
 
     private(set) var tasks: [PlanTask] = []
     private(set) var categoryGroups: [CategoryGroup] = []
+    /// All non-archived projects, sorted by `sortIndex` then `createdAt`.
+    private(set) var projects: [Project] = []
+    private(set) var archivedProjects: [Project] = []
     /// The most recently deleted task, kept around briefly so the UI can
     /// offer an Undo toast. Cleared after 5 seconds or on the next undo.
     private(set) var recentlyDeleted: PlanTask?
@@ -99,6 +102,10 @@ final class TaskStore {
     func toggleComplete(_ taskID: UUID) {
         guard let record = fetchRecord(taskID) else { return }
         record.isCompleted.toggle()
+        // Keep the kanban column in sync. When a user un-completes a task
+        // we drop it back into Upcoming rather than try to recall its prior
+        // column — simpler and predictable.
+        record.boardStatusRaw = (record.isCompleted ? TaskBoardStatus.done : .upcoming).rawValue
         save()
         refresh()
     }
@@ -185,6 +192,8 @@ final class TaskStore {
         record.durationMinutes = task.durationMinutes
         record.notes = task.notes
         record.isCompleted = task.isCompleted
+        record.boardStatusRaw = (task.isCompleted ? .done : task.boardStatus).rawValue
+        record.project = task.projectID.flatMap(fetchProjectRecord(_:))
         save()
         refresh()
     }
@@ -233,6 +242,13 @@ final class TaskStore {
             return CategoryGroup(category: cat, tasks: bucket)
         }
 
+        let projectDescriptor = FetchDescriptor<ProjectRecord>(
+            sortBy: [SortDescriptor(\.sortIndex), SortDescriptor(\.createdAt)]
+        )
+        let projectRecords = (try? context.fetch(projectDescriptor)) ?? []
+        projects = projectRecords.filter { !$0.isArchived }.map { $0.toDomain() }
+        archivedProjects = projectRecords.filter { $0.isArchived }.map { $0.toDomain() }
+
         notifications?.sync(with: tasks)
     }
 
@@ -266,6 +282,7 @@ final class TaskStore {
         let subRecords = plan.subtasks.enumerated().map { index, sub in
             SubtaskRecord(id: sub.id, title: sub.title, isCompleted: sub.isCompleted, sortIndex: index)
         }
+        let parent: ProjectRecord? = plan.projectID.flatMap(fetchProjectRecord(_:))
         return TaskRecord(
             id: plan.id,
             title: plan.title,
@@ -276,7 +293,130 @@ final class TaskStore {
             durationMinutes: plan.durationMinutes,
             notes: plan.notes,
             isCompleted: plan.isCompleted,
-            subtasks: subRecords
+            boardStatus: plan.boardStatus,
+            subtasks: subRecords,
+            project: parent
         )
+    }
+
+    // MARK: - Project queries
+
+    func project(with id: UUID) -> Project? {
+        projects.first { $0.id == id } ?? archivedProjects.first { $0.id == id }
+    }
+
+    /// All tasks belonging to a project, regardless of date or completion.
+    func tasks(in projectID: UUID) -> [PlanTask] {
+        tasks.filter { $0.projectID == projectID }
+    }
+
+    /// Tasks for a project bucketed by board status. Order within each bucket:
+    /// scheduled-today first, then by start time.
+    func tasksByBoardStatus(in projectID: UUID) -> [TaskBoardStatus: [PlanTask]] {
+        var buckets: [TaskBoardStatus: [PlanTask]] = [:]
+        for task in tasks(in: projectID) {
+            buckets[task.boardStatus, default: []].append(task)
+        }
+        for (status, list) in buckets {
+            buckets[status] = list.sorted { a, b in
+                if a.hasTime != b.hasTime { return a.hasTime }
+                return a.startTime < b.startTime
+            }
+        }
+        return buckets
+    }
+
+    // MARK: - Project mutations
+
+    @discardableResult
+    func createProject(
+        name: String,
+        iconSymbol: String = "folder.fill",
+        colorHex: String = "8B7CF6",
+        notes: String? = nil
+    ) -> Project {
+        let nextIndex = (projects.map(\.sortIndex).max() ?? -1) + 1
+        let record = ProjectRecord(
+            name: name.trimmingCharacters(in: .whitespacesAndNewlines),
+            iconSymbol: iconSymbol,
+            colorHex: colorHex,
+            notes: notes,
+            sortIndex: nextIndex
+        )
+        context.insert(record)
+        save()
+        refresh()
+        return record.toDomain()
+    }
+
+    func renameProject(_ id: UUID, to newName: String) {
+        guard let record = fetchProjectRecord(id) else { return }
+        let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        record.name = trimmed
+        save()
+        refresh()
+    }
+
+    func updateProject(
+        _ id: UUID,
+        name: String? = nil,
+        iconSymbol: String? = nil,
+        colorHex: String? = nil,
+        notes: String?? = nil
+    ) {
+        guard let record = fetchProjectRecord(id) else { return }
+        if let name {
+            let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty { record.name = trimmed }
+        }
+        if let iconSymbol { record.iconSymbol = iconSymbol }
+        if let colorHex   { record.colorHex   = colorHex   }
+        if let notes      { record.notes      = notes      }
+        save()
+        refresh()
+    }
+
+    func setArchived(_ id: UUID, archived: Bool) {
+        guard let record = fetchProjectRecord(id) else { return }
+        record.isArchived = archived
+        save()
+        refresh()
+    }
+
+    /// Permanently deletes a project. Cascade-deletes its tasks.
+    func deleteProject(_ id: UUID) {
+        guard let record = fetchProjectRecord(id) else { return }
+        context.delete(record)
+        save()
+        refresh()
+    }
+
+    // MARK: - Board status
+
+    /// Move a task to a different kanban column. `.done` also flips
+    /// `isCompleted` to true; moving away from `.done` clears it.
+    func setBoardStatus(_ status: TaskBoardStatus, for taskID: UUID) {
+        guard let record = fetchRecord(taskID) else { return }
+        record.boardStatusRaw = status.rawValue
+        record.isCompleted = (status == .done)
+        save()
+        refresh()
+    }
+
+    /// Reassign or clear a task's parent project.
+    func setProject(_ projectID: UUID?, for taskID: UUID) {
+        guard let record = fetchRecord(taskID) else { return }
+        record.project = projectID.flatMap(fetchProjectRecord(_:))
+        save()
+        refresh()
+    }
+
+    private func fetchProjectRecord(_ id: UUID) -> ProjectRecord? {
+        let target = id
+        let descriptor = FetchDescriptor<ProjectRecord>(
+            predicate: #Predicate<ProjectRecord> { $0.id == target }
+        )
+        return try? context.fetch(descriptor).first
     }
 }

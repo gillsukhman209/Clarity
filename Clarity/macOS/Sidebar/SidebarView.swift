@@ -23,6 +23,7 @@ struct SidebarView: View {
             VStack(alignment: .leading, spacing: AppSpacing.xs) {
                 navRow(.day, label: "Today", symbol: "calendar.day.timeline.left")
                 navRow(.calendar, label: "Calendar", symbol: "calendar")
+                navRow(.projects, label: "Projects", symbol: "square.stack.3d.up")
             }
             .padding(.horizontal, AppSpacing.sm)
 
