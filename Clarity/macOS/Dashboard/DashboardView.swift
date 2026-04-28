@@ -17,30 +17,58 @@ struct DashboardView: View {
 
     @Environment(TaskStore.self) private var store
     @State private var showQuickAdd: Bool = false
+    @State private var showDatePicker: Bool = false
 
     private var visibleSections: [DaySection] {
         store.daySections(on: currentDate)
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            header
-                .padding(.horizontal, AppSpacing.xl)
-                .padding(.top, AppSpacing.xl)
+        ZStack(alignment: .bottomTrailing) {
+            VStack(alignment: .leading, spacing: 0) {
+                header
+                    .padding(.horizontal, AppSpacing.xl)
+                    .padding(.top, AppSpacing.xl)
 
-            toolbar
-                .padding(.horizontal, AppSpacing.xl)
-                .padding(.top, AppSpacing.lg)
-                .padding(.bottom, AppSpacing.lg)
+                toolbar
+                    .padding(.horizontal, AppSpacing.xl)
+                    .padding(.top, AppSpacing.lg)
+                    .padding(.bottom, AppSpacing.lg)
 
-            if visibleSections.isEmpty {
-                emptyState
-            } else {
-                taskList
+                if visibleSections.isEmpty {
+                    emptyState
+                } else {
+                    taskList
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+
+            floatingMic
+                .padding(AppSpacing.xl)
+        }
+        .background(AppColors.background)
+    }
+
+    // MARK: - Floating mic — opens the "Plan your whole day" view
+    private var floatingMic: some View {
+        HoverScaleButton(action: onOpenBrainDump, hoverScale: 1.06) {
+            ZStack {
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [AppColors.accent.opacity(0.95), AppColors.accent],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 56, height: 56)
+                    .appShadow(AppShadow.micGlow)
+                Image(systemName: "mic.fill")
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(.white)
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(AppColors.background)
+        .accessibilityLabel("Plan your whole day")
     }
 
     // MARK: - Header
@@ -97,10 +125,23 @@ struct DashboardView: View {
     private var todayNavigator: some View {
         HStack(spacing: 6) {
             chevronButton(symbol: "chevron.left", action: { stepDate(-1) })
-            Text(navigatorLabel)
-                .font(AppTypography.bodySemibold)
-                .foregroundStyle(AppColors.textPrimary)
+            Button {
+                showDatePicker = true
+            } label: {
+                HStack(spacing: 4) {
+                    Text(navigatorLabel)
+                        .font(AppTypography.bodySemibold)
+                        .foregroundStyle(AppColors.textPrimary)
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(AppColors.textTertiary)
+                }
                 .frame(minWidth: 80)
+            }
+            .buttonStyle(.plain)
+            .popover(isPresented: $showDatePicker, arrowEdge: .bottom) {
+                DatePickerSheet(date: $currentDate, isPresented: $showDatePicker)
+            }
             chevronButton(symbol: "chevron.right", action: { stepDate(1) })
         }
         .padding(.horizontal, 6)

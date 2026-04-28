@@ -11,7 +11,6 @@ import SwiftUI
 
 struct InsightsPanel: View {
     var currentDate: Date = Date()
-    var onOpenBrainDump: () -> Void = {}
     var onClose: () -> Void = {}
 
     @Environment(TaskStore.self) private var store
@@ -21,9 +20,8 @@ struct InsightsPanel: View {
     }
 
     var body: some View {
-        ZStack(alignment: .bottomTrailing) {
-            ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: AppSpacing.lg) {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: AppSpacing.lg) {
                     HStack {
                         Text("Insights")
                             .font(AppTypography.title)
@@ -91,11 +89,7 @@ struct InsightsPanel: View {
                     progressCard(stats)
                 }
                 .padding(AppSpacing.lg)
-                .padding(.bottom, 80)
-            }
-
-            floatingMic
-                .padding(AppSpacing.lg)
+                .padding(.bottom, AppSpacing.lg)
         }
         .frame(maxHeight: .infinity, alignment: .top)
         .background(AppColors.background)
@@ -179,26 +173,5 @@ struct InsightsPanel: View {
         }
     }
 
-    // MARK: - Floating mic
-    private var floatingMic: some View {
-        HoverScaleButton(action: onOpenBrainDump, hoverScale: 1.06) {
-            ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [AppColors.accent.opacity(0.95), AppColors.accent],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 52, height: 52)
-                    .appShadow(AppShadow.micGlow)
-                Image(systemName: "mic.fill")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(.white)
-            }
-        }
-        .accessibilityLabel("Brain dump")
-    }
 }
 #endif

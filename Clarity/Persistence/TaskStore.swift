@@ -183,6 +183,16 @@ final class TaskStore {
         refresh()
     }
 
+    /// Add tasks without touching anything that's already there.
+    /// Used by Quick Add (text or short voice).
+    func append(_ newTasks: [PlanTask]) {
+        for plan in newTasks {
+            context.insert(record(from: plan))
+        }
+        save()
+        refresh()
+    }
+
     private func record(from plan: PlanTask) -> TaskRecord {
         let subRecords = plan.subtasks.enumerated().map { index, sub in
             SubtaskRecord(id: sub.id, title: sub.title, isCompleted: sub.isCompleted, sortIndex: index)

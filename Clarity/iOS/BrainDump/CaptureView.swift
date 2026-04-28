@@ -6,6 +6,8 @@
 //  Phase 7 — wired to a real `AudioRecorder` and gated on `TranscriptionService`.
 //  Phase 11 — cross-platform (iOS + macOS).
 //  Phase 13 — surfaces denied/failed states with actionable recovery.
+//  Phase 18 — redesigned as a dedicated "Plan your whole day" view: the
+//  headline lives at the top, the big glowing mic anchors the bottom.
 //
 
 import SwiftUI
@@ -29,12 +31,15 @@ struct CaptureView: View {
             topBar
             Spacer(minLength: AppSpacing.lg)
             header
-            Spacer(minLength: AppSpacing.lg)
-            orbAndWaveform
-            Spacer(minLength: AppSpacing.lg)
+            Spacer(minLength: AppSpacing.md)
             tipsCard
                 .padding(.horizontal, AppSpacing.lg)
-                .padding(.bottom, AppSpacing.lg)
+            Spacer(minLength: AppSpacing.lg)
+            statusBlock
+                .padding(.horizontal, AppSpacing.lg)
+            Spacer(minLength: AppSpacing.md)
+            micCluster
+                .padding(.bottom, AppSpacing.xl)
         }
         .background(AppColors.background)
         .onChange(of: recorder.state) { _, newValue in
@@ -62,11 +67,11 @@ struct CaptureView: View {
     // MARK: - Header
     private var header: some View {
         VStack(spacing: AppSpacing.xs) {
-            Text("What's on your mind?")
-                .font(AppTypography.displayMedium)
+            Text("Plan your whole day")
+                .font(AppTypography.displayLarge)
                 .foregroundStyle(AppColors.textPrimary)
                 .multilineTextAlignment(.center)
-            Text("Speak freely. I'll handle the rest.")
+            Text("Speak everything that's on your mind.\nI'll turn it into a real schedule.")
                 .font(AppTypography.bodyLarge)
                 .foregroundStyle(AppColors.textSecondary)
                 .multilineTextAlignment(.center)
@@ -74,7 +79,7 @@ struct CaptureView: View {
         .padding(.horizontal, AppSpacing.lg)
     }
 
-    // MARK: - Orb / waveform / status
+    // MARK: - Mic cluster (bottom)
 
     private var isRecording: Bool { recorder.state == .recording }
 
@@ -87,6 +92,73 @@ struct CaptureView: View {
         case .preparing, .idle, .failed: return false
         case .ready, .transcribing: return true
         }
+    }
+
+    private var micCluster: some View {
+        Button {
+            Task {
+                if isRecording {
+                    recorder.stop()
+                } else {
+                    await recorder.start()
+                }
+            }
+        } label: {
+            ZStack {
+                GlowingOrb(size: 200, isPulsing: isRecording)
+                Image(systemName: "mic.fill")
+                    .font(.system(size: 52, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .shadow(color: AppColors.accent.opacity(0.35), radius: 6)
+                    .scaleEffect(isRecording ? 1.05 : 1.0)
+                    .animation(.easeInOut(duration: 0.25), value: isRecording)
+            }
+            .frame(width: 320, height: 320)
+            .opacity(canTap ? 1.0 : 0.7)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PressableStyle(pressedScale: 0.96))
+        .disabled(!canTap)
+    }
+
+    // MARK: - Status (waveform / timer / messages)
+
+    @ViewBuilder
+    private var statusBlock: some View {
+        VStack(spacing: AppSpacing.sm) {
+            if isRecording {
+                LiveWaveformBars(levels: recorder.levels, color: AppColors.accent.opacity(0.65))
+                    .frame(height: 36)
+                    .transition(.opacity)
+                Text(recorder.elapsedLabel)
+                    .font(.system(size: 18, weight: .medium, design: .monospaced))
+                    .foregroundStyle(AppColors.textSecondary)
+                    .transition(.opacity)
+                Text("Tap the mic again when you're done.")
+                    .font(AppTypography.caption)
+                    .foregroundStyle(AppColors.textTertiary)
+            } else {
+                Text(primaryLabel)
+                    .font(AppTypography.bodyMedium)
+                    .foregroundStyle(AppColors.textTertiary)
+                    .frame(minHeight: 24)
+                    .multilineTextAlignment(.center)
+                if recorder.state == .denied {
+                    Button {
+                        openSystemSettings()
+                    } label: {
+                        Text("Open Settings")
+                            .font(AppTypography.bodySemibold)
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 18)
+                            .padding(.vertical, 10)
+                            .background(Capsule(style: .continuous).fill(AppColors.accent))
+                    }
+                    .buttonStyle(PressableStyle(pressedScale: 0.98))
+                }
+            }
+        }
+        .animation(.easeInOut(duration: 0.25), value: isRecording)
     }
 
     private var primaryLabel: String {
@@ -104,82 +176,9 @@ struct CaptureView: View {
         case .failed(let msg):
             return msg
         case .ready, .transcribing:
-            return isRecording ? "Tap to stop" : "Tap to start"
+            return "Tap the mic to start"
         case .idle:
             return "Loading…"
-        }
-    }
-
-    private var orbAndWaveform: some View {
-        VStack(spacing: AppSpacing.xl) {
-            Button {
-                Task {
-                    if isRecording {
-                        recorder.stop()
-                    } else {
-                        await recorder.start()
-                    }
-                }
-            } label: {
-                ZStack {
-                    GlowingOrb(size: 180, isPulsing: isRecording)
-                    Image(systemName: "mic.fill")
-                        .font(.system(size: 44, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .shadow(color: AppColors.accent.opacity(0.35), radius: 6)
-                        .scaleEffect(isRecording ? 1.05 : 1.0)
-                        .animation(.easeInOut(duration: 0.25), value: isRecording)
-                }
-                .frame(width: 280, height: 280)
-                .opacity(canTap ? 1.0 : 0.7)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(PressableStyle(pressedScale: 0.96))
-            .disabled(!canTap)
-
-            statusBlock
-                .animation(.easeInOut(duration: 0.25), value: isRecording)
-                .padding(.horizontal, AppSpacing.lg)
-        }
-    }
-
-    @ViewBuilder
-    private var statusBlock: some View {
-        VStack(spacing: AppSpacing.sm) {
-            if isRecording {
-                LiveWaveformBars(levels: recorder.levels, color: AppColors.accent.opacity(0.65))
-                    .frame(height: 36)
-                    .transition(.opacity)
-                Text(recorder.elapsedLabel)
-                    .font(.system(size: 18, weight: .medium, design: .monospaced))
-                    .foregroundStyle(AppColors.textSecondary)
-                    .transition(.opacity)
-            } else {
-                Text(primaryLabel)
-                    .font(AppTypography.bodyMedium)
-                    .foregroundStyle(AppColors.textTertiary)
-                    .frame(minHeight: 36)
-                    .multilineTextAlignment(.center)
-                    .transition(.opacity)
-                if recorder.state == .denied {
-                    Button {
-                        openSystemSettings()
-                    } label: {
-                        Text("Open Settings")
-                            .font(AppTypography.bodySemibold)
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 18)
-                            .padding(.vertical, 10)
-                            .background(Capsule(style: .continuous).fill(AppColors.accent))
-                    }
-                    .buttonStyle(PressableStyle(pressedScale: 0.98))
-                } else {
-                    Text("0:00")
-                        .font(.system(size: 18, weight: .medium, design: .monospaced))
-                        .foregroundStyle(AppColors.textTertiary)
-                        .transition(.opacity)
-                }
-            }
         }
     }
 

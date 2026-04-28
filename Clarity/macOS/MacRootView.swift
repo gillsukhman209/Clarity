@@ -46,7 +46,6 @@ struct MacRootView: View {
                 Divider().background(AppColors.divider)
                 InsightsPanel(
                     currentDate: currentDate,
-                    onOpenBrainDump: { showBrainDump = true },
                     onClose: { showInsights = false }
                 )
                 .frame(width: 280)

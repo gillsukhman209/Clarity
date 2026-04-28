@@ -28,19 +28,31 @@ final class PlanGenerator {
         }
     }
 
+    /// Two distinct ways the user invokes the AI.
+    enum Mode {
+        /// Brain-dump — full day plan. Animates stages. Caller usually
+        /// `replaceAll`s the day with the result.
+        case planDay
+        /// Quick add — extract just the task(s) the user described.
+        /// Skips animation. Caller usually `append`s the result.
+        case quickAdd
+    }
+
     private(set) var stage: Stage = .extracting
     private(set) var isComplete: Bool = false
     private(set) var error: String?
     private(set) var tasks: [PlanTask] = []
 
-    /// Drives the BuildingPlanView. Animates the stage list while the API call
-    /// runs in parallel; the final result lands once both finish.
     /// - Parameters:
-    ///   - quick: when true, skips the 5-stage animation and resolves as soon
-    ///     as OpenAI responds. Used by Quick Add where the user just wants
-    ///     their task added with no theatrics.
-    func generate(from transcript: String, existing: [PlanTask] = [], quick: Bool = false) async {
-        // Reset
+    ///   - mode: `.planDay` for a full brain-dump (with animation, merges with
+    ///     `existing`), `.quickAdd` for short text/voice input that should
+    ///     extract only the new task(s) without re-planning the day.
+    ///   - existing: only consulted in `.planDay` mode.
+    func generate(
+        from transcript: String,
+        mode: Mode = .planDay,
+        existing: [PlanTask] = []
+    ) async {
         stage = .extracting
         isComplete = false
         error = nil
@@ -55,20 +67,28 @@ final class PlanGenerator {
 
         let trimmed = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
-            error = "I didn't catch anything to plan."
+            error = (mode == .quickAdd) ? "I didn't catch anything." : "I didn't catch anything to plan."
             isComplete = true
             return
         }
 
-        let userMessage = buildUserMessage(transcript: trimmed, existing: existing)
+        let systemContent: String
+        let userContent: String
+        switch mode {
+        case .planDay:
+            systemContent = Self.planDayPrompt
+            userContent = buildUserMessage(transcript: trimmed, existing: existing)
+        case .quickAdd:
+            systemContent = Self.quickAddPrompt
+            userContent = buildQuickAddMessage(transcript: trimmed)
+        }
 
-        if quick {
-            applyResult(await callOpenAI(userMessage: userMessage, apiKey: apiKey))
+        if mode == .quickAdd {
+            applyResult(await callOpenAI(systemContent: systemContent, userContent: userContent, apiKey: apiKey))
             return
         }
 
-        // Run stage animation + API in parallel.
-        async let apiResult = callOpenAI(userMessage: userMessage, apiKey: apiKey)
+        async let apiResult = callOpenAI(systemContent: systemContent, userContent: userContent, apiKey: apiKey)
         for next in Stage.allCases {
             stage = next
             try? await Task.sleep(for: .milliseconds(700))
@@ -145,7 +165,7 @@ final class PlanGenerator {
 
     // MARK: - OpenAI call
 
-    private func callOpenAI(userMessage: String, apiKey: String) async -> Result<[PlanTask], Error> {
+    private func callOpenAI(systemContent: String, userContent: String, apiKey: String) async -> Result<[PlanTask], Error> {
         let url = URL(string: "https://api.openai.com/v1/chat/completions")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -156,8 +176,8 @@ final class PlanGenerator {
         let body = ChatRequest(
             model: "gpt-4o-mini",
             messages: [
-                ChatMessage(role: "system", content: PlanGenerator.systemPrompt),
-                ChatMessage(role: "user", content: userMessage)
+                ChatMessage(role: "system", content: systemContent),
+                ChatMessage(role: "user", content: userContent)
             ],
             response_format: .schema
         )
@@ -190,9 +210,51 @@ final class PlanGenerator {
         }
     }
 
-    // MARK: - System prompt
+    // MARK: - Quick-add helpers
 
-    private static let systemPrompt: String = """
+    private func buildQuickAddMessage(transcript: String) -> String {
+        return """
+        Today's date: \(Self.todayDateString())
+
+        \(transcript)
+        """
+    }
+
+    private static let quickAddPrompt: String = """
+    You are Clarity. The user is adding a quick task or two via text or voice. Extract ONLY the task(s) the user explicitly said. Do NOT plan a full day. Do NOT invent any extra tasks.
+
+    Each thing the user mentions becomes exactly one task. If they mention nothing else, output exactly one task.
+
+    DAY ASSIGNMENT (dayOffset):
+    - dayOffset is an INTEGER number of days from today. 0 = today (default), 1 = tomorrow, 7 = a week from today.
+    - The user message starts with "Today's date: ...". Use that as your anchor.
+    - If the user says "tomorrow", "next Friday", "in 3 days", "Monday", etc., set dayOffset accordingly.
+    - If they don't mention a day, dayOffset = 0.
+
+    PER-TASK FIELDS:
+    - title: short, action-oriented, faithful to what the user said
+    - category, priority, section: see allowed values
+    - dayOffset: integer, see above
+    - startHour, startMinute, durationMinutes: realistic numbers (estimate duration if not given; default 30 min)
+    - notes: 1 sentence on how to approach it (or empty string if obvious)
+    - subtasks: empty array unless the user explicitly described multiple steps
+
+    ALLOWED VALUES:
+    - category: "work" | "personal" | "health" | "admin" | "focus" | "create" | "energize" | "windDown"
+    - priority: "low" | "medium" | "high"
+    - section: "focusTime" | "create" | "getThingsDone" | "energize" | "windDown"
+
+    SECTION GUIDANCE:
+    - focusTime: deep, uninterrupted thinking work
+    - create: making something new (writing, design, content)
+    - getThingsDone: admin, errands, meetings, quick wins
+    - energize: meals, breaks, exercise
+    - windDown: low-effort, evening tasks, calls, reading
+    """
+
+    // MARK: - Plan-day prompt
+
+    private static let planDayPrompt: String = """
     You are Clarity, a personal day planning assistant. The user describes things they want to do today; you turn it into a structured schedule.
 
     CRITICAL — DO NOT INVENT TASKS:

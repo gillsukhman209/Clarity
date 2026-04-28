@@ -14,6 +14,7 @@ struct DayPlanView: View {
     @Environment(TaskStore.self) private var store
     @State private var presentedTask: SelectedTask?
     @State private var showQuickAdd: Bool = false
+    @State private var showDatePicker: Bool = false
     @State private var currentDate: Date = Calendar.current.startOfDay(for: Date())
 
     private var visibleTasks: [PlanTask] {
@@ -77,6 +78,13 @@ struct DayPlanView: View {
                 .presentationDragIndicator(.visible)
                 #endif
         }
+        .sheet(isPresented: $showDatePicker) {
+            DatePickerSheet(date: $currentDate, isPresented: $showDatePicker)
+                #if os(iOS)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+                #endif
+        }
     }
 
     // MARK: - Top bar
@@ -94,14 +102,24 @@ struct DayPlanView: View {
 
             Spacer()
 
-            VStack(spacing: 2) {
-                Text(navigatorLabel)
-                    .font(AppTypography.titleSmall)
-                    .foregroundStyle(AppColors.textPrimary)
-                Text(dateLabel)
-                    .font(AppTypography.caption)
-                    .foregroundStyle(AppColors.textTertiary)
+            Button {
+                showDatePicker = true
+            } label: {
+                VStack(spacing: 2) {
+                    HStack(spacing: 4) {
+                        Text(navigatorLabel)
+                            .font(AppTypography.titleSmall)
+                            .foregroundStyle(AppColors.textPrimary)
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(AppColors.textTertiary)
+                    }
+                    Text(dateLabel)
+                        .font(AppTypography.caption)
+                        .foregroundStyle(AppColors.textTertiary)
+                }
             }
+            .buttonStyle(.plain)
 
             Spacer()
 
