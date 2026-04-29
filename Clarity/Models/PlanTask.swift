@@ -27,6 +27,10 @@ struct PlanTask: Identifiable, Hashable {
     /// Which kanban column this task lives in when shown on a project board.
     /// Stays in sync with `isCompleted` (`.done` ⇔ completed).
     var boardStatus: TaskBoardStatus
+    /// Manual ordering for Anytime tasks within a single day. Timed tasks
+    /// always sort by `startTime`; this only affects timeless tasks. Lower
+    /// values appear first.
+    var manualOrder: Int
 
     init(
         id: UUID = UUID(),
@@ -40,7 +44,8 @@ struct PlanTask: Identifiable, Hashable {
         subtasks: [Subtask] = [],
         isCompleted: Bool = false,
         projectID: UUID? = nil,
-        boardStatus: TaskBoardStatus = .upcoming
+        boardStatus: TaskBoardStatus = .upcoming,
+        manualOrder: Int = 0
     ) {
         self.id = id
         self.title = title
@@ -54,6 +59,7 @@ struct PlanTask: Identifiable, Hashable {
         self.isCompleted = isCompleted
         self.projectID = projectID
         self.boardStatus = isCompleted ? .done : boardStatus
+        self.manualOrder = manualOrder
     }
 
     var hasDuration: Bool { durationMinutes > 0 }

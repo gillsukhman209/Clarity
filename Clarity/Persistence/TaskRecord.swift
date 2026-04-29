@@ -25,6 +25,9 @@ final class TaskRecord {
     var isCompleted: Bool = false
     /// Kanban column on a project board. Always `done` if the task is completed.
     var boardStatusRaw: String = "upcoming"
+    /// Manual ordering for Anytime tasks within a day (timed tasks ignore this).
+    /// Lower values appear earlier in the list. Default 0; renumbered on drag.
+    var manualOrder: Int = 0
 
     @Relationship(deleteRule: .cascade, inverse: \SubtaskRecord.task)
     var subtasks: [SubtaskRecord]? = []
@@ -43,6 +46,7 @@ final class TaskRecord {
         notes: String? = nil,
         isCompleted: Bool = false,
         boardStatus: TaskBoardStatus = .upcoming,
+        manualOrder: Int = 0,
         subtasks: [SubtaskRecord] = [],
         project: ProjectRecord? = nil
     ) {
@@ -56,6 +60,7 @@ final class TaskRecord {
         self.notes = notes
         self.isCompleted = isCompleted
         self.boardStatusRaw = (isCompleted ? TaskBoardStatus.done : boardStatus).rawValue
+        self.manualOrder = manualOrder
         self.subtasks = subtasks
         self.project = project
     }
@@ -80,7 +85,8 @@ final class TaskRecord {
             subtasks: subs,
             isCompleted: isCompleted,
             projectID: project?.id,
-            boardStatus: boardStatus
+            boardStatus: boardStatus,
+            manualOrder: manualOrder
         )
     }
 }

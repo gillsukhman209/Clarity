@@ -73,14 +73,17 @@ final class TaskStore {
     // MARK: - Date-filtered views
 
     /// Tasks scheduled on the same calendar day as `date`.
-    /// Timed tasks come first (sorted by time), timeless tasks last.
+    /// Order: timed tasks first by `startTime`; Anytime tasks last by
+    /// `manualOrder` (set by drag-reorder), with `id` as a stable tiebreaker.
     func tasks(on date: Date) -> [PlanTask] {
         let cal = Calendar.current
         return tasks
             .filter { cal.isDate($0.startTime, inSameDayAs: date) }
             .sorted { a, b in
                 if a.hasTime != b.hasTime { return a.hasTime }   // timed before timeless
-                return a.startTime < b.startTime
+                if a.hasTime { return a.startTime < b.startTime }
+                if a.manualOrder != b.manualOrder { return a.manualOrder < b.manualOrder }
+                return a.id.uuidString < b.id.uuidString
             }
     }
 
@@ -218,7 +221,21 @@ final class TaskStore {
         record.notes = task.notes
         record.isCompleted = task.isCompleted
         record.boardStatusRaw = (task.isCompleted ? .done : task.boardStatus).rawValue
+        record.manualOrder = task.manualOrder
         record.project = task.projectID.flatMap(fetchProjectRecord(_:))
+        save()
+        refresh()
+    }
+
+    /// Renumber the manualOrder of all Anytime tasks (in the given scope) to
+    /// match the supplied id order. Pass exactly the tasks you want
+    /// reordered — usually all Anytime tasks for one day, or all Anytime
+    /// tasks within one category for grouped view.
+    func reorderAnytimeTasks(_ orderedIDs: [UUID]) {
+        for (index, id) in orderedIDs.enumerated() {
+            guard let record = fetchRecord(id) else { continue }
+            record.manualOrder = index
+        }
         save()
         refresh()
     }
@@ -319,6 +336,7 @@ final class TaskStore {
             notes: plan.notes,
             isCompleted: plan.isCompleted,
             boardStatus: plan.boardStatus,
+            manualOrder: plan.manualOrder,
             subtasks: subRecords,
             project: parent
         )

@@ -18,14 +18,51 @@ struct DayPlanView: View {
     /// Shared with the macOS dashboard via the same UserDefaults key.
     /// ON = grouped by section (default). OFF = flat chronological.
     @AppStorage("dashboardGroupBySection") private var groupBySection: Bool = true
-    /// Shared toggle: ON hides any task that belongs to a project from the
-    /// Today view (and the carryover section). Project tasks still live in
-    /// the project board regardless. Default OFF — show everything.
-    @AppStorage("hideProjectTasksOnToday") private var hideProjectTasks: Bool = false
+    /// Per-project visibility for Today. JSON-encoded `[UUID]` of projects
+    /// the user has hidden. Free-floating tasks (no project) always show.
+    /// Shared with macOS via the same UserDefaults key.
+    @AppStorage(HiddenProjects.storageKey) private var hiddenProjectsRaw: String = ""
+
+    private var hiddenProjectIDs: Set<UUID> {
+        HiddenProjects.decode(hiddenProjectsRaw)
+    }
+
+    private func isHidden(_ task: PlanTask) -> Bool {
+        guard let pid = task.projectID else { return false }
+        return hiddenProjectIDs.contains(pid)
+    }
 
     private var visibleTasks: [PlanTask] {
-        let all = store.tasks(on: currentDate)
-        return hideProjectTasks ? all.filter { $0.projectID == nil } : all
+        store.tasks(on: currentDate).filter { !isHidden($0) }
+    }
+
+    /// All Anytime tasks for the current day, in their current display order.
+    /// Used as the pool when a user drags one Anytime task onto another.
+    private var anytimeTasks: [PlanTask] {
+        visibleTasks.filter { !$0.hasTime }
+    }
+
+    /// Anytime tasks within a single category, in display order. Used by the
+    /// grouped view so reorder stays scoped to one category bucket.
+    private func anytimeTasks(in group: CategoryGroup) -> [PlanTask] {
+        group.tasks.filter { !$0.hasTime }
+    }
+
+    /// Compute the new id ordering after a drag, then renumber via the store.
+    /// `target == nil` means "drop at the end". No-op if the drag is onto itself.
+    private func reorderAnytime(dragged: UUID, before target: UUID?, in pool: [PlanTask]) {
+        var ids = pool.map(\.id)
+        guard ids.contains(dragged) else { return }
+        if let target, target == dragged { return }
+        ids.removeAll { $0 == dragged }
+        if let target, let idx = ids.firstIndex(of: target) {
+            ids.insert(dragged, at: idx)
+        } else {
+            ids.append(dragged)
+        }
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+            store.reorderAnytimeTasks(ids)
+        }
     }
 
     private var carryoverItems: [PlanTask] {
@@ -61,9 +98,13 @@ struct DayPlanView: View {
 
     private var visibleGroups: [CategoryGroup] {
         let groups = store.categoryGroups(on: currentDate)
-        guard hideProjectTasks else { return groups }
+        let hidden = hiddenProjectIDs
+        guard !hidden.isEmpty else { return groups }
         return groups.compactMap { group in
-            let filtered = group.tasks.filter { $0.projectID == nil }
+            let filtered = group.tasks.filter {
+                guard let pid = $0.projectID else { return true }
+                return !hidden.contains(pid)
+            }
             guard !filtered.isEmpty else { return nil }
             return CategoryGroup(category: group.category, tasks: filtered)
         }
@@ -83,6 +124,46 @@ struct DayPlanView: View {
         let f = DateFormatter()
         f.dateFormat = "EEE, MMM d"
         return f.string(from: currentDate)
+    }
+
+    @ViewBuilder
+    private var projectVisibilityMenu: some View {
+        if store.projects.isEmpty {
+            EmptyView()
+        } else {
+            let hidden = hiddenProjectIDs
+            let anyHidden = !hidden.isEmpty
+            Menu {
+                Section("Show in Today") {
+                    ForEach(store.projects) { p in
+                        Button {
+                            hiddenProjectsRaw = HiddenProjects.toggling(p.id, in: hiddenProjectsRaw)
+                        } label: {
+                            Label(p.name, systemImage: hidden.contains(p.id) ? "circle" : "checkmark.circle.fill")
+                        }
+                    }
+                }
+                if anyHidden {
+                    Button {
+                        hiddenProjectsRaw = ""
+                    } label: {
+                        Label("Show all projects", systemImage: "eye")
+                    }
+                } else {
+                    Button {
+                        hiddenProjectsRaw = HiddenProjects.encode(Set(store.projects.map(\.id)))
+                    } label: {
+                        Label("Hide all projects", systemImage: "eye.slash")
+                    }
+                }
+            } label: {
+                Image(systemName: anyHidden ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(anyHidden ? AppColors.accent : AppColors.textSecondary)
+                    .frame(width: 36, height: 36)
+            }
+            .accessibilityLabel("Filter projects shown in Today")
+        }
     }
 
     private func stepDate(_ delta: Int) {
@@ -177,16 +258,7 @@ struct DayPlanView: View {
             .buttonStyle(.plain)
             .accessibilityLabel(groupBySection ? "Switch to time-sorted view" : "Switch to grouped view")
 
-            Button {
-                hideProjectTasks.toggle()
-            } label: {
-                Image(systemName: hideProjectTasks ? "square.stack.3d.up.slash" : "square.stack.3d.up")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(hideProjectTasks ? AppColors.textTertiary : AppColors.accent)
-                    .frame(width: 36, height: 36)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(hideProjectTasks ? "Show project tasks in Today" : "Hide project tasks from Today")
+            projectVisibilityMenu
         }
         .padding(.horizontal, AppSpacing.lg)
         .padding(.vertical, AppSpacing.sm)
@@ -202,39 +274,9 @@ struct DayPlanView: View {
                             .padding(.horizontal, AppSpacing.xs)
                         VStack(spacing: AppSpacing.xs) {
                             ForEach(group.tasks) { task in
-                                SwipeableRow(
-                                    onTap: { presentedTask = SelectedTask(id: task.id) },
-                                    leadingAction: SwipeAction(
-                                        symbol: task.isCompleted ? "arrow.uturn.backward" : "checkmark",
-                                        title: task.isCompleted ? "Undo" : "Done",
-                                        color: AppColors.Priority.lowInk,
-                                        action: { store.toggleComplete(task.id) }
-                                    ),
-                                    trailingAction: SwipeAction(
-                                        symbol: "trash",
-                                        title: "Delete",
-                                        color: AppColors.Priority.highInk,
-                                        isDestructive: true,
-                                        action: { store.delete(task.id) }
-                                    )
-                                ) {
-                                    row(for: task, previous: nil)
-                                        .background(AppColors.background)
-                                }
-                                .contextMenu {
-                                    Button {
-                                        store.toggleComplete(task.id)
-                                    } label: {
-                                        Label(task.isCompleted ? "Mark incomplete" : "Mark complete",
-                                              systemImage: task.isCompleted ? "arrow.uturn.backward" : "checkmark.circle")
-                                    }
-                                    Button(role: .destructive) {
-                                        store.delete(task.id)
-                                    } label: {
-                                        Label("Delete", systemImage: "trash")
-                                    }
-                                }
+                                groupedRow(task, in: group)
                             }
+                            anytimeDropAtEnd(pool: anytimeTasks(in: group))
                         }
                     }
                 }
@@ -251,44 +293,102 @@ struct DayPlanView: View {
         ScrollView {
             LazyVStack(spacing: AppSpacing.xs) {
                 ForEach(Array(visibleTasks.enumerated()), id: \.element.id) { index, task in
-                    SwipeableRow(
-                        onTap: { presentedTask = SelectedTask(id: task.id) },
-                        leadingAction: SwipeAction(
-                            symbol: task.isCompleted ? "arrow.uturn.backward" : "checkmark",
-                            title: task.isCompleted ? "Undo" : "Done",
-                            color: AppColors.Priority.lowInk,
-                            action: { store.toggleComplete(task.id) }
-                        ),
-                        trailingAction: SwipeAction(
-                            symbol: "trash",
-                            title: "Delete",
-                            color: AppColors.Priority.highInk,
-                            isDestructive: true,
-                            action: { store.delete(task.id) }
-                        )
-                    ) {
-                        row(for: task, previous: index > 0 ? visibleTasks[index - 1] : nil)
-                            .background(AppColors.background)
-                    }
-                    .contextMenu {
-                        Button {
-                            store.toggleComplete(task.id)
-                        } label: {
-                            Label(task.isCompleted ? "Mark incomplete" : "Mark complete",
-                                  systemImage: task.isCompleted ? "arrow.uturn.backward" : "checkmark.circle")
-                        }
-                        Button(role: .destructive) {
-                            store.delete(task.id)
-                        } label: {
-                            Label("Delete", systemImage: "trash")
-                        }
-                    }
+                    flatRow(task, previous: index > 0 ? visibleTasks[index - 1] : nil)
                 }
+                anytimeDropAtEnd(pool: anytimeTasks)
                 carryoverHeader
             }
             .padding(.horizontal, AppSpacing.md)
             .padding(.top, AppSpacing.md)
             .padding(.bottom, 140)
+        }
+    }
+
+    // MARK: - Row builders (with reorder for Anytime tasks)
+
+    @ViewBuilder
+    private func groupedRow(_ task: PlanTask, in group: CategoryGroup) -> some View {
+        if task.hasTime {
+            // Timed rows keep swipe-to-complete / swipe-to-delete.
+            timedSwipeRow(task, previous: nil)
+        } else {
+            // Anytime rows are draggable for reorder. SwipeableRow can't be
+            // used here — its DragGesture(minimumDistance: 0) consumes the
+            // touch before iOS's drag-and-drop system can start. Actions
+            // live in the context menu instead.
+            anytimeReorderableRow(task) {
+                reorderAnytime(dragged: $0, before: task.id, in: anytimeTasks(in: group))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func flatRow(_ task: PlanTask, previous: PlanTask?) -> some View {
+        if task.hasTime {
+            timedSwipeRow(task, previous: previous)
+        } else {
+            anytimeReorderableRow(task) {
+                reorderAnytime(dragged: $0, before: task.id, in: anytimeTasks)
+            }
+        }
+    }
+
+    private func timedSwipeRow(_ task: PlanTask, previous: PlanTask?) -> some View {
+        SwipeableRow(
+            onTap: { presentedTask = SelectedTask(id: task.id) },
+            leadingAction: SwipeAction(
+                symbol: task.isCompleted ? "arrow.uturn.backward" : "checkmark",
+                title: task.isCompleted ? "Undo" : "Done",
+                color: AppColors.Priority.lowInk,
+                action: { store.toggleComplete(task.id) }
+            ),
+            trailingAction: SwipeAction(
+                symbol: "trash",
+                title: "Delete",
+                color: AppColors.Priority.highInk,
+                isDestructive: true,
+                action: { store.delete(task.id) }
+            )
+        ) {
+            row(for: task, previous: previous)
+                .background(AppColors.background)
+        }
+        .contextMenu { rowMenu(task) }
+    }
+
+    private func anytimeReorderableRow(_ task: PlanTask, onDrop: @escaping (UUID) -> Void) -> some View {
+        row(for: task, previous: nil)
+            .background(AppColors.background)
+            .contentShape(Rectangle())
+            .onTapGesture { presentedTask = SelectedTask(id: task.id) }
+            .contextMenu { rowMenu(task) }
+            .draggable(DraggedTask(taskID: task.id))
+            .modifier(AnytimeDropTarget(targetID: task.id, onDrop: onDrop))
+    }
+
+    @ViewBuilder
+    private func rowMenu(_ task: PlanTask) -> some View {
+        Button { store.toggleComplete(task.id) } label: {
+            Label(task.isCompleted ? "Mark incomplete" : "Mark complete",
+                  systemImage: task.isCompleted ? "arrow.uturn.backward" : "checkmark.circle")
+        }
+        Button(role: .destructive) { store.delete(task.id) } label: {
+            Label("Delete", systemImage: "trash")
+        }
+    }
+
+    @ViewBuilder
+    private func anytimeDropAtEnd(pool: [PlanTask]) -> some View {
+        if !pool.isEmpty {
+            // Tall transparent strip below the last Anytime row that catches
+            // "drop at the end" without occupying visible space.
+            Color.clear
+                .frame(maxWidth: .infinity, minHeight: 28)
+                .contentShape(Rectangle())
+                .modifier(AnytimeDropTarget(
+                    targetID: nil,
+                    onDrop: { id in reorderAnytime(dragged: id, before: nil, in: pool) }
+                ))
         }
     }
 

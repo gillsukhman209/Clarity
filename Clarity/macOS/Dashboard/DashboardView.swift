@@ -17,29 +17,41 @@ struct DashboardView: View {
 
     @Environment(TaskStore.self) private var store
     @State private var showQuickAdd: Bool = false
+    @State private var showProjectFilter: Bool = false
     /// Persisted across launches. Default ON (grouped by section, current behavior).
     /// Toggle off to flatten the day into one chronological list.
     @AppStorage("dashboardGroupBySection") private var groupBySection: Bool = true
-    /// Shared toggle: ON hides any task that belongs to a project from the
-    /// Today/Dashboard view. Project tasks still live in the project board
-    /// regardless. Default OFF — show everything.
-    @AppStorage("hideProjectTasksOnToday") private var hideProjectTasks: Bool = false
+    /// Per-project visibility for Today. JSON-encoded `[UUID]` of projects
+    /// the user has hidden. Free-floating tasks (no project) always show.
+    @AppStorage(HiddenProjects.storageKey) private var hiddenProjectsRaw: String = ""
+
+    private var hiddenProjectIDs: Set<UUID> {
+        HiddenProjects.decode(hiddenProjectsRaw)
+    }
+
+    private func isHidden(_ task: PlanTask) -> Bool {
+        guard let pid = task.projectID else { return false }
+        return hiddenProjectIDs.contains(pid)
+    }
 
     private var visibleGroups: [CategoryGroup] {
         let groups = store.categoryGroups(on: currentDate)
-        guard hideProjectTasks else { return groups }
+        let hidden = hiddenProjectIDs
+        guard !hidden.isEmpty else { return groups }
         return groups.compactMap { group in
-            let filtered = group.tasks.filter { $0.projectID == nil }
+            let filtered = group.tasks.filter {
+                guard let pid = $0.projectID else { return true }
+                return !hidden.contains(pid)
+            }
             guard !filtered.isEmpty else { return nil }
             return CategoryGroup(category: group.category, tasks: filtered)
         }
     }
 
-    /// Tasks for the visible day. Flat-mode display reads this directly,
-    /// so the sort here is what guarantees 9 AM appears above 1 PM.
+    /// Tasks for the visible day. The store already sorts timed-first, then
+    /// Anytime tasks by `manualOrder`, so we just filter out hidden projects.
     private var visibleTasks: [PlanTask] {
-        let all = store.tasks(on: currentDate).sorted { $0.startTime < $1.startTime }
-        return hideProjectTasks ? all.filter { $0.projectID == nil } : all
+        store.tasks(on: currentDate).filter { !isHidden($0) }
     }
 
     private var carryoverItems: [PlanTask] {
@@ -193,21 +205,95 @@ struct DashboardView: View {
         .accessibilityLabel(groupBySection ? "Switch to time-sorted view" : "Switch to grouped view")
     }
 
+    @ViewBuilder
     private var projectVisibilityToggle: some View {
-        HoverScaleButton(action: { hideProjectTasks.toggle() }, hoverScale: 1.06) {
-            Image(systemName: hideProjectTasks ? "square.stack.3d.up.slash" : "square.stack.3d.up")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(hideProjectTasks ? AppColors.textTertiary : AppColors.accent)
-                .frame(width: 32, height: 32)
-                .background(
-                    Capsule(style: .continuous)
-                        .fill(hideProjectTasks ? AppColors.surface : AppColors.accentSoft.opacity(0.45))
-                )
-                .overlay(
-                    Capsule(style: .continuous).stroke(AppColors.border, lineWidth: 1)
-                )
+        if store.projects.isEmpty {
+            EmptyView()
+        } else {
+            let anyHidden = !hiddenProjectIDs.isEmpty
+            HoverScaleButton(action: { showProjectFilter.toggle() }, hoverScale: 1.06) {
+                Image(systemName: anyHidden ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(anyHidden ? AppColors.accent : AppColors.textSecondary)
+                    .frame(width: 32, height: 32)
+                    .background(
+                        Capsule(style: .continuous)
+                            .fill(anyHidden ? AppColors.accentSoft.opacity(0.45) : AppColors.surface)
+                    )
+                    .overlay(
+                        Capsule(style: .continuous).stroke(AppColors.border, lineWidth: 1)
+                    )
+            }
+            .accessibilityLabel("Filter projects shown in Today")
+            .popover(isPresented: $showProjectFilter, arrowEdge: .bottom) {
+                projectFilterPopover
+            }
         }
-        .accessibilityLabel(hideProjectTasks ? "Show project tasks in Today" : "Hide project tasks from Today")
+    }
+
+    private var projectFilterPopover: some View {
+        let hidden = hiddenProjectIDs
+        let anyHidden = !hidden.isEmpty
+        return VStack(alignment: .leading, spacing: 0) {
+            Text("Show in Today")
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .foregroundStyle(AppColors.textTertiary)
+                .padding(.horizontal, 14)
+                .padding(.top, 12)
+                .padding(.bottom, 8)
+
+            VStack(spacing: 2) {
+                ForEach(store.projects) { p in
+                    let on = !hidden.contains(p.id)
+                    Button {
+                        hiddenProjectsRaw = HiddenProjects.toggling(p.id, in: hiddenProjectsRaw)
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: on ? "checkmark.circle.fill" : "circle")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(on ? p.accentColor : AppColors.textTertiary)
+                            Image(systemName: p.iconSymbol)
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(p.accentColor)
+                                .frame(width: 16)
+                            Text(p.name)
+                                .font(.system(size: 13, weight: .medium, design: .rounded))
+                                .foregroundStyle(AppColors.textPrimary)
+                            Spacer(minLength: 0)
+                        }
+                        .contentShape(Rectangle())
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 7)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            Divider().background(AppColors.divider).padding(.vertical, 6)
+
+            Button {
+                if anyHidden {
+                    hiddenProjectsRaw = ""
+                } else {
+                    hiddenProjectsRaw = HiddenProjects.encode(Set(store.projects.map(\.id)))
+                }
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: anyHidden ? "eye" : "eye.slash")
+                        .font(.system(size: 12, weight: .semibold))
+                    Text(anyHidden ? "Show all projects" : "Hide all projects")
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    Spacer(minLength: 0)
+                }
+                .foregroundStyle(AppColors.accent)
+                .contentShape(Rectangle())
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+            }
+            .buttonStyle(.plain)
+            .padding(.bottom, 8)
+        }
+        .frame(minWidth: 240)
     }
 
     private var todayNavigator: some View {
@@ -342,47 +428,11 @@ struct DashboardView: View {
                 ForEach(visibleGroups) { group in
                     VStack(alignment: .leading, spacing: AppSpacing.sm) {
                         CategoryGroupHeader(group: group)
-
                         VStack(spacing: AppSpacing.xs) {
                             ForEach(group.tasks) { task in
-                                SwipeableRow(
-                                    onTap: { selectedTaskID = task.id },
-                                    leadingAction: SwipeAction(
-                                        symbol: task.isCompleted ? "arrow.uturn.backward" : "checkmark",
-                                        title: task.isCompleted ? "Undo" : "Done",
-                                        color: AppColors.Priority.lowInk,
-                                        action: { store.toggleComplete(task.id) }
-                                    ),
-                                    trailingAction: SwipeAction(
-                                        symbol: "trash",
-                                        title: "Delete",
-                                        color: AppColors.Priority.highInk,
-                                        isDestructive: true,
-                                        action: {
-                                            if selectedTaskID == task.id { selectedTaskID = nil }
-                                            store.delete(task.id)
-                                        }
-                                    )
-                                ) {
-                                    taskRow(task)
-                                        .background(AppColors.background)
-                                }
-                                .contextMenu {
-                                    Button {
-                                        store.toggleComplete(task.id)
-                                    } label: {
-                                        Label(task.isCompleted ? "Mark incomplete" : "Mark complete",
-                                              systemImage: task.isCompleted ? "arrow.uturn.backward" : "checkmark.circle")
-                                    }
-                                    Divider()
-                                    Button(role: .destructive) {
-                                        if selectedTaskID == task.id { selectedTaskID = nil }
-                                        store.delete(task.id)
-                                    } label: {
-                                        Label("Delete", systemImage: "trash")
-                                    }
-                                }
+                                groupedRow(task, in: group)
                             }
+                            anytimeDropAtEnd(pool: anytimeTasks(in: group))
                         }
                     }
                 }
@@ -408,48 +458,130 @@ struct DashboardView: View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: AppSpacing.xs) {
                 ForEach(visibleTasks) { task in
-                    SwipeableRow(
-                        onTap: { selectedTaskID = task.id },
-                        leadingAction: SwipeAction(
-                            symbol: task.isCompleted ? "arrow.uturn.backward" : "checkmark",
-                            title: task.isCompleted ? "Undo" : "Done",
-                            color: AppColors.Priority.lowInk,
-                            action: { store.toggleComplete(task.id) }
-                        ),
-                        trailingAction: SwipeAction(
-                            symbol: "trash",
-                            title: "Delete",
-                            color: AppColors.Priority.highInk,
-                            isDestructive: true,
-                            action: {
-                                if selectedTaskID == task.id { selectedTaskID = nil }
-                                store.delete(task.id)
-                            }
-                        )
-                    ) {
-                        taskRow(task)
-                            .background(AppColors.background)
-                    }
-                    .contextMenu {
-                        Button {
-                            store.toggleComplete(task.id)
-                        } label: {
-                            Label(task.isCompleted ? "Mark incomplete" : "Mark complete",
-                                  systemImage: task.isCompleted ? "arrow.uturn.backward" : "checkmark.circle")
-                        }
-                        Divider()
-                        Button(role: .destructive) {
-                            if selectedTaskID == task.id { selectedTaskID = nil }
-                            store.delete(task.id)
-                        } label: {
-                            Label("Delete", systemImage: "trash")
-                        }
-                    }
+                    flatRow(task)
                 }
+                anytimeDropAtEnd(pool: anytimeTasks)
                 carryoverHeader
             }
             .padding(.horizontal, AppSpacing.xl)
             .padding(.bottom, AppSpacing.xl)
+        }
+    }
+
+    // MARK: - Anytime reorder helpers
+
+    /// All Anytime tasks for the current day in display order.
+    private var anytimeTasks: [PlanTask] {
+        visibleTasks.filter { !$0.hasTime }
+    }
+
+    /// Anytime tasks within a single category bucket. Reorder is scoped to
+    /// each category in grouped view to avoid implicit category changes.
+    private func anytimeTasks(in group: CategoryGroup) -> [PlanTask] {
+        group.tasks.filter { !$0.hasTime }
+    }
+
+    private func reorderAnytime(dragged: UUID, before target: UUID?, in pool: [PlanTask]) {
+        var ids = pool.map(\.id)
+        guard ids.contains(dragged) else { return }
+        if let target, target == dragged { return }
+        ids.removeAll { $0 == dragged }
+        if let target, let idx = ids.firstIndex(of: target) {
+            ids.insert(dragged, at: idx)
+        } else {
+            ids.append(dragged)
+        }
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+            store.reorderAnytimeTasks(ids)
+        }
+    }
+
+    @ViewBuilder
+    private func groupedRow(_ task: PlanTask, in group: CategoryGroup) -> some View {
+        if task.hasTime {
+            timedSwipeRow(task)
+        } else {
+            anytimeReorderableRow(task) {
+                reorderAnytime(dragged: $0, before: task.id, in: anytimeTasks(in: group))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func flatRow(_ task: PlanTask) -> some View {
+        if task.hasTime {
+            timedSwipeRow(task)
+        } else {
+            anytimeReorderableRow(task) {
+                reorderAnytime(dragged: $0, before: task.id, in: anytimeTasks)
+            }
+        }
+    }
+
+    private func timedSwipeRow(_ task: PlanTask) -> some View {
+        SwipeableRow(
+            onTap: { selectedTaskID = task.id },
+            leadingAction: SwipeAction(
+                symbol: task.isCompleted ? "arrow.uturn.backward" : "checkmark",
+                title: task.isCompleted ? "Undo" : "Done",
+                color: AppColors.Priority.lowInk,
+                action: { store.toggleComplete(task.id) }
+            ),
+            trailingAction: SwipeAction(
+                symbol: "trash",
+                title: "Delete",
+                color: AppColors.Priority.highInk,
+                isDestructive: true,
+                action: {
+                    if selectedTaskID == task.id { selectedTaskID = nil }
+                    store.delete(task.id)
+                }
+            )
+        ) {
+            taskRow(task).background(AppColors.background)
+        }
+        .contextMenu { rowMenu(task) }
+    }
+
+    /// Anytime rows skip SwipeableRow because its DragGesture would consume
+    /// the click/touch before the system's drag-and-drop could initiate.
+    private func anytimeReorderableRow(_ task: PlanTask, onDrop: @escaping (UUID) -> Void) -> some View {
+        taskRow(task)
+            .background(AppColors.background)
+            .contentShape(Rectangle())
+            .onTapGesture { selectedTaskID = task.id }
+            .contextMenu { rowMenu(task) }
+            .draggable(DraggedTask(taskID: task.id))
+            .modifier(AnytimeDropTarget(targetID: task.id, onDrop: onDrop))
+    }
+
+    @ViewBuilder
+    private func rowMenu(_ task: PlanTask) -> some View {
+        Button {
+            store.toggleComplete(task.id)
+        } label: {
+            Label(task.isCompleted ? "Mark incomplete" : "Mark complete",
+                  systemImage: task.isCompleted ? "arrow.uturn.backward" : "checkmark.circle")
+        }
+        Divider()
+        Button(role: .destructive) {
+            if selectedTaskID == task.id { selectedTaskID = nil }
+            store.delete(task.id)
+        } label: {
+            Label("Delete", systemImage: "trash")
+        }
+    }
+
+    @ViewBuilder
+    private func anytimeDropAtEnd(pool: [PlanTask]) -> some View {
+        if !pool.isEmpty {
+            Color.clear
+                .frame(maxWidth: .infinity, minHeight: 28)
+                .contentShape(Rectangle())
+                .modifier(AnytimeDropTarget(
+                    targetID: nil,
+                    onDrop: { id in reorderAnytime(dragged: id, before: nil, in: pool) }
+                ))
         }
     }
 }
