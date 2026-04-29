@@ -84,6 +84,31 @@ final class TaskStore {
             }
     }
 
+    /// Incomplete free-floating tasks dated in the past, capped at 14 days back.
+    /// Used by the "Left from yesterday" carryover section on Today. Project
+    /// tasks are excluded — those stay on the project board's Upcoming column.
+    /// Sort: most recent slip first; within a day, by start time ascending.
+    func carryoverTasks(asOf date: Date) -> [PlanTask] {
+        let cal = Calendar.current
+        let todayStart = cal.startOfDay(for: date)
+        guard let windowStart = cal.date(byAdding: .day, value: -14, to: todayStart) else {
+            return []
+        }
+        return tasks
+            .filter { task in
+                !task.isCompleted
+                    && task.projectID == nil
+                    && task.startTime < todayStart
+                    && task.startTime >= windowStart
+            }
+            .sorted { a, b in
+                let aDay = cal.startOfDay(for: a.startTime)
+                let bDay = cal.startOfDay(for: b.startTime)
+                if aDay != bDay { return aDay > bDay }   // newer day first
+                return a.startTime < b.startTime          // earliest time within the day
+            }
+    }
+
     /// Groups the day's tasks by category in `TaskCategory.allCases` order.
     /// Empty buckets are dropped so the UI only renders categories with work.
     func categoryGroups(on date: Date) -> [CategoryGroup] {

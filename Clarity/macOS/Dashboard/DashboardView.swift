@@ -20,16 +20,58 @@ struct DashboardView: View {
     /// Persisted across launches. Default ON (grouped by section, current behavior).
     /// Toggle off to flatten the day into one chronological list.
     @AppStorage("dashboardGroupBySection") private var groupBySection: Bool = true
+    /// Shared toggle: ON hides any task that belongs to a project from the
+    /// Today/Dashboard view. Project tasks still live in the project board
+    /// regardless. Default OFF — show everything.
+    @AppStorage("hideProjectTasksOnToday") private var hideProjectTasks: Bool = false
 
     private var visibleGroups: [CategoryGroup] {
-        store.categoryGroups(on: currentDate)
+        let groups = store.categoryGroups(on: currentDate)
+        guard hideProjectTasks else { return groups }
+        return groups.compactMap { group in
+            let filtered = group.tasks.filter { $0.projectID == nil }
+            guard !filtered.isEmpty else { return nil }
+            return CategoryGroup(category: group.category, tasks: filtered)
+        }
     }
 
     /// Tasks for the visible day. Flat-mode display reads this directly,
     /// so the sort here is what guarantees 9 AM appears above 1 PM.
     private var visibleTasks: [PlanTask] {
-        store.tasks(on: currentDate)
-            .sorted { $0.startTime < $1.startTime }
+        let all = store.tasks(on: currentDate).sorted { $0.startTime < $1.startTime }
+        return hideProjectTasks ? all.filter { $0.projectID == nil } : all
+    }
+
+    private var carryoverItems: [PlanTask] {
+        guard Calendar.current.isDateInToday(currentDate) else { return [] }
+        return store.carryoverTasks(asOf: Date())
+    }
+
+    @ViewBuilder
+    private var carryoverHeader: some View {
+        if !carryoverItems.isEmpty {
+            CarryoverSection(
+                tasks: carryoverItems,
+                onTapTask: { selectedTaskID = $0 },
+                onMoveToToday: { id in
+                    withAnimation(.spring(response: 0.34, dampingFraction: 0.82)) {
+                        store.move(id, to: Date())
+                    }
+                },
+                onComplete: { id in
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        store.toggleComplete(id)
+                    }
+                },
+                onDelete: { id in
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        if selectedTaskID == id { selectedTaskID = nil }
+                        store.delete(id)
+                    }
+                }
+            )
+            .padding(.top, AppSpacing.lg)
+        }
     }
 
     var body: some View {
@@ -44,7 +86,7 @@ struct DashboardView: View {
                     .padding(.top, AppSpacing.lg)
                     .padding(.bottom, AppSpacing.lg)
 
-                if visibleTasks.isEmpty {
+                if visibleTasks.isEmpty && carryoverItems.isEmpty {
                     emptyState
                 } else if groupBySection {
                     taskList
@@ -129,6 +171,7 @@ struct DashboardView: View {
             searchField
             addTaskButton
             sortToggle
+            projectVisibilityToggle
             insightsToggle
         }
     }
@@ -148,6 +191,23 @@ struct DashboardView: View {
                 )
         }
         .accessibilityLabel(groupBySection ? "Switch to time-sorted view" : "Switch to grouped view")
+    }
+
+    private var projectVisibilityToggle: some View {
+        HoverScaleButton(action: { hideProjectTasks.toggle() }, hoverScale: 1.06) {
+            Image(systemName: hideProjectTasks ? "square.stack.3d.up.slash" : "square.stack.3d.up")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(hideProjectTasks ? AppColors.textTertiary : AppColors.accent)
+                .frame(width: 32, height: 32)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(hideProjectTasks ? AppColors.surface : AppColors.accentSoft.opacity(0.45))
+                )
+                .overlay(
+                    Capsule(style: .continuous).stroke(AppColors.border, lineWidth: 1)
+                )
+        }
+        .accessibilityLabel(hideProjectTasks ? "Show project tasks in Today" : "Hide project tasks from Today")
     }
 
     private var todayNavigator: some View {
@@ -326,6 +386,7 @@ struct DashboardView: View {
                         }
                     }
                 }
+                carryoverHeader
             }
             .padding(.horizontal, AppSpacing.xl)
             .padding(.bottom, AppSpacing.xl)
@@ -385,6 +446,7 @@ struct DashboardView: View {
                         }
                     }
                 }
+                carryoverHeader
             }
             .padding(.horizontal, AppSpacing.xl)
             .padding(.bottom, AppSpacing.xl)

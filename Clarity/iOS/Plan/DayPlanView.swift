@@ -18,13 +18,55 @@ struct DayPlanView: View {
     /// Shared with the macOS dashboard via the same UserDefaults key.
     /// ON = grouped by section (default). OFF = flat chronological.
     @AppStorage("dashboardGroupBySection") private var groupBySection: Bool = true
+    /// Shared toggle: ON hides any task that belongs to a project from the
+    /// Today view (and the carryover section). Project tasks still live in
+    /// the project board regardless. Default OFF — show everything.
+    @AppStorage("hideProjectTasksOnToday") private var hideProjectTasks: Bool = false
 
     private var visibleTasks: [PlanTask] {
-        store.tasks(on: currentDate)
+        let all = store.tasks(on: currentDate)
+        return hideProjectTasks ? all.filter { $0.projectID == nil } : all
+    }
+
+    private var carryoverItems: [PlanTask] {
+        guard Calendar.current.isDateInToday(currentDate) else { return [] }
+        return store.carryoverTasks(asOf: Date())
+    }
+
+    @ViewBuilder
+    private var carryoverHeader: some View {
+        if !carryoverItems.isEmpty {
+            CarryoverSection(
+                tasks: carryoverItems,
+                onTapTask: { presentedTask = SelectedTask(id: $0) },
+                onMoveToToday: { id in
+                    withAnimation(.spring(response: 0.34, dampingFraction: 0.82)) {
+                        store.move(id, to: Date())
+                    }
+                },
+                onComplete: { id in
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        store.toggleComplete(id)
+                    }
+                },
+                onDelete: { id in
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        store.delete(id)
+                    }
+                }
+            )
+            .padding(.top, AppSpacing.lg)
+        }
     }
 
     private var visibleGroups: [CategoryGroup] {
-        store.categoryGroups(on: currentDate)
+        let groups = store.categoryGroups(on: currentDate)
+        guard hideProjectTasks else { return groups }
+        return groups.compactMap { group in
+            let filtered = group.tasks.filter { $0.projectID == nil }
+            guard !filtered.isEmpty else { return nil }
+            return CategoryGroup(category: group.category, tasks: filtered)
+        }
     }
 
     private var dateLabel: String {
@@ -55,7 +97,7 @@ struct DayPlanView: View {
             VStack(spacing: 0) {
                 topBar
                 Divider().background(AppColors.divider)
-                if visibleTasks.isEmpty {
+                if visibleTasks.isEmpty && carryoverItems.isEmpty {
                     emptyState
                 } else if groupBySection {
                     sectionedTaskList
@@ -134,6 +176,17 @@ struct DayPlanView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(groupBySection ? "Switch to time-sorted view" : "Switch to grouped view")
+
+            Button {
+                hideProjectTasks.toggle()
+            } label: {
+                Image(systemName: hideProjectTasks ? "square.stack.3d.up.slash" : "square.stack.3d.up")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(hideProjectTasks ? AppColors.textTertiary : AppColors.accent)
+                    .frame(width: 36, height: 36)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(hideProjectTasks ? "Show project tasks in Today" : "Hide project tasks from Today")
         }
         .padding(.horizontal, AppSpacing.lg)
         .padding(.vertical, AppSpacing.sm)
@@ -185,6 +238,7 @@ struct DayPlanView: View {
                         }
                     }
                 }
+                carryoverHeader
             }
             .padding(.horizontal, AppSpacing.md)
             .padding(.top, AppSpacing.md)
@@ -230,6 +284,7 @@ struct DayPlanView: View {
                         }
                     }
                 }
+                carryoverHeader
             }
             .padding(.horizontal, AppSpacing.md)
             .padding(.top, AppSpacing.md)
