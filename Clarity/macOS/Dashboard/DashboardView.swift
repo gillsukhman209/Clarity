@@ -432,7 +432,6 @@ struct DashboardView: View {
                             ForEach(group.tasks) { task in
                                 groupedRow(task, in: group)
                             }
-                            anytimeDropAtEnd(pool: anytimeTasks(in: group))
                         }
                     }
                 }
@@ -460,7 +459,6 @@ struct DashboardView: View {
                 ForEach(visibleTasks) { task in
                     flatRow(task)
                 }
-                anytimeDropAtEnd(pool: anytimeTasks)
                 carryoverHeader
             }
             .padding(.horizontal, AppSpacing.xl)
@@ -481,29 +479,12 @@ struct DashboardView: View {
         group.tasks.filter { !$0.hasTime }
     }
 
-    private func reorderAnytime(dragged: UUID, before target: UUID?, in pool: [PlanTask]) {
-        var ids = pool.map(\.id)
-        guard ids.contains(dragged) else { return }
-        if let target, target == dragged { return }
-        ids.removeAll { $0 == dragged }
-        if let target, let idx = ids.firstIndex(of: target) {
-            ids.insert(dragged, at: idx)
-        } else {
-            ids.append(dragged)
-        }
-        withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
-            store.reorderAnytimeTasks(ids)
-        }
-    }
-
     @ViewBuilder
     private func groupedRow(_ task: PlanTask, in group: CategoryGroup) -> some View {
         if task.hasTime {
             timedSwipeRow(task)
         } else {
-            anytimeReorderableRow(task) {
-                reorderAnytime(dragged: $0, before: task.id, in: anytimeTasks(in: group))
-            }
+            anytimeRow(task, pool: anytimeTasks(in: group))
         }
     }
 
@@ -512,10 +493,33 @@ struct DashboardView: View {
         if task.hasTime {
             timedSwipeRow(task)
         } else {
-            anytimeReorderableRow(task) {
-                reorderAnytime(dragged: $0, before: task.id, in: anytimeTasks)
-            }
+            anytimeRow(task, pool: anytimeTasks)
         }
+    }
+
+    private func anytimeRow(_ task: PlanTask, pool: [PlanTask]) -> some View {
+        AnytimeReorderRow(
+            task: task,
+            pool: pool,
+            onTap: { selectedTaskID = task.id },
+            onComplete: {
+                withAnimation(.easeInOut(duration: 0.2)) { store.toggleComplete(task.id) }
+            },
+            onDelete: {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    if selectedTaskID == task.id { selectedTaskID = nil }
+                    store.delete(task.id)
+                }
+            },
+            onReorder: { newIDs in
+                withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+                    store.reorderAnytimeTasks(newIDs)
+                }
+            }
+        ) {
+            taskRow(task).background(AppColors.background)
+        }
+        .contextMenu { rowMenu(task) }
     }
 
     private func timedSwipeRow(_ task: PlanTask) -> some View {
@@ -543,18 +547,6 @@ struct DashboardView: View {
         .contextMenu { rowMenu(task) }
     }
 
-    /// Anytime rows skip SwipeableRow because its DragGesture would consume
-    /// the click/touch before the system's drag-and-drop could initiate.
-    private func anytimeReorderableRow(_ task: PlanTask, onDrop: @escaping (UUID) -> Void) -> some View {
-        taskRow(task)
-            .background(AppColors.background)
-            .contentShape(Rectangle())
-            .onTapGesture { selectedTaskID = task.id }
-            .contextMenu { rowMenu(task) }
-            .draggable(DraggedTask(taskID: task.id))
-            .modifier(AnytimeDropTarget(targetID: task.id, onDrop: onDrop))
-    }
-
     @ViewBuilder
     private func rowMenu(_ task: PlanTask) -> some View {
         Button {
@@ -572,17 +564,5 @@ struct DashboardView: View {
         }
     }
 
-    @ViewBuilder
-    private func anytimeDropAtEnd(pool: [PlanTask]) -> some View {
-        if !pool.isEmpty {
-            Color.clear
-                .frame(maxWidth: .infinity, minHeight: 28)
-                .contentShape(Rectangle())
-                .modifier(AnytimeDropTarget(
-                    targetID: nil,
-                    onDrop: { id in reorderAnytime(dragged: id, before: nil, in: pool) }
-                ))
-        }
-    }
 }
 #endif

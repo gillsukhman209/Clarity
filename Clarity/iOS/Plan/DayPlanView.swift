@@ -48,23 +48,6 @@ struct DayPlanView: View {
         group.tasks.filter { !$0.hasTime }
     }
 
-    /// Compute the new id ordering after a drag, then renumber via the store.
-    /// `target == nil` means "drop at the end". No-op if the drag is onto itself.
-    private func reorderAnytime(dragged: UUID, before target: UUID?, in pool: [PlanTask]) {
-        var ids = pool.map(\.id)
-        guard ids.contains(dragged) else { return }
-        if let target, target == dragged { return }
-        ids.removeAll { $0 == dragged }
-        if let target, let idx = ids.firstIndex(of: target) {
-            ids.insert(dragged, at: idx)
-        } else {
-            ids.append(dragged)
-        }
-        withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
-            store.reorderAnytimeTasks(ids)
-        }
-    }
-
     private var carryoverItems: [PlanTask] {
         guard Calendar.current.isDateInToday(currentDate) else { return [] }
         return store.carryoverTasks(asOf: Date())
@@ -276,7 +259,6 @@ struct DayPlanView: View {
                             ForEach(group.tasks) { task in
                                 groupedRow(task, in: group)
                             }
-                            anytimeDropAtEnd(pool: anytimeTasks(in: group))
                         }
                     }
                 }
@@ -295,7 +277,6 @@ struct DayPlanView: View {
                 ForEach(Array(visibleTasks.enumerated()), id: \.element.id) { index, task in
                     flatRow(task, previous: index > 0 ? visibleTasks[index - 1] : nil)
                 }
-                anytimeDropAtEnd(pool: anytimeTasks)
                 carryoverHeader
             }
             .padding(.horizontal, AppSpacing.md)
@@ -309,16 +290,9 @@ struct DayPlanView: View {
     @ViewBuilder
     private func groupedRow(_ task: PlanTask, in group: CategoryGroup) -> some View {
         if task.hasTime {
-            // Timed rows keep swipe-to-complete / swipe-to-delete.
             timedSwipeRow(task, previous: nil)
         } else {
-            // Anytime rows are draggable for reorder. SwipeableRow can't be
-            // used here — its DragGesture(minimumDistance: 0) consumes the
-            // touch before iOS's drag-and-drop system can start. Actions
-            // live in the context menu instead.
-            anytimeReorderableRow(task) {
-                reorderAnytime(dragged: $0, before: task.id, in: anytimeTasks(in: group))
-            }
+            anytimeRow(task, pool: anytimeTasks(in: group))
         }
     }
 
@@ -327,9 +301,7 @@ struct DayPlanView: View {
         if task.hasTime {
             timedSwipeRow(task, previous: previous)
         } else {
-            anytimeReorderableRow(task) {
-                reorderAnytime(dragged: $0, before: task.id, in: anytimeTasks)
-            }
+            anytimeRow(task, pool: anytimeTasks)
         }
     }
 
@@ -356,14 +328,27 @@ struct DayPlanView: View {
         .contextMenu { rowMenu(task) }
     }
 
-    private func anytimeReorderableRow(_ task: PlanTask, onDrop: @escaping (UUID) -> Void) -> some View {
-        row(for: task, previous: nil)
-            .background(AppColors.background)
-            .contentShape(Rectangle())
-            .onTapGesture { presentedTask = SelectedTask(id: task.id) }
-            .contextMenu { rowMenu(task) }
-            .draggable(DraggedTask(taskID: task.id))
-            .modifier(AnytimeDropTarget(targetID: task.id, onDrop: onDrop))
+    private func anytimeRow(_ task: PlanTask, pool: [PlanTask]) -> some View {
+        AnytimeReorderRow(
+            task: task,
+            pool: pool,
+            onTap: { presentedTask = SelectedTask(id: task.id) },
+            onComplete: {
+                withAnimation(.easeInOut(duration: 0.2)) { store.toggleComplete(task.id) }
+            },
+            onDelete: {
+                withAnimation(.easeInOut(duration: 0.2)) { store.delete(task.id) }
+            },
+            onReorder: { newIDs in
+                withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+                    store.reorderAnytimeTasks(newIDs)
+                }
+            }
+        ) {
+            row(for: task, previous: nil)
+                .background(AppColors.background)
+        }
+        .contextMenu { rowMenu(task) }
     }
 
     @ViewBuilder
@@ -374,21 +359,6 @@ struct DayPlanView: View {
         }
         Button(role: .destructive) { store.delete(task.id) } label: {
             Label("Delete", systemImage: "trash")
-        }
-    }
-
-    @ViewBuilder
-    private func anytimeDropAtEnd(pool: [PlanTask]) -> some View {
-        if !pool.isEmpty {
-            // Tall transparent strip below the last Anytime row that catches
-            // "drop at the end" without occupying visible space.
-            Color.clear
-                .frame(maxWidth: .infinity, minHeight: 28)
-                .contentShape(Rectangle())
-                .modifier(AnytimeDropTarget(
-                    targetID: nil,
-                    onDrop: { id in reorderAnytime(dragged: id, before: nil, in: pool) }
-                ))
         }
     }
 

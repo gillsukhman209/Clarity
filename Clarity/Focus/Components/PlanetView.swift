@@ -3,56 +3,71 @@
 //  Clarity
 //
 //  3D-feeling planet for the Pomodoro hero. Layers, back → front:
-//   - Atmospheric halo (violet aura wrapping the body)
-//   - Sphere body (radial gradient with off-center light source)
-//   - Limb darkening (radial inset for the curvature illusion)
-//   - Specular highlight on the lit side
-//   - Saturn ring, with the back half visually masked behind the body
+//   1. Wide soft atmospheric scatter (very dim, all directions — sets the
+//      overall halo envelope so the planet doesn't sit in flat black)
+//   2. Directional limb glow — bright crescent ONLY on the lit side via an
+//      AngularGradient. Replaces the harsh full-ring halo.
+//   3. Saturn ring back half (drawn before the body for occlusion)
+//   4. Sphere body — radial gradient with off-center light source
+//   5. Limb darkening — multiplied black gradient deepening the rim
+//   6. Specular highlight crescent on the lit side
+//   7. Saturn ring front half — masked to the lower portion so it appears
+//      to wrap around the planet
 //
 
 import SwiftUI
 
 struct PlanetView: View {
-    /// Diameter of the planet body, in points.
     let size: CGFloat
-    /// Accent color for halo, ring, specular highlight (drifts during the
-    /// session — passed in by the hero).
     let accent: Color
 
     var body: some View {
         ZStack {
-            // 1. Atmospheric halo — wraps the planet, brightest on lit side
+            // 1. Wide soft ambient scattering
+            Circle()
+                .fill(accent)
+                .frame(width: size * 1.55, height: size * 1.55)
+                .blur(radius: size * 0.28)
+                .opacity(0.14)
+
+            // 2. Directional limb glow — bright crescent on the lit side.
+            //    AngularGradient sweeps from -90° (top), brightest just past
+            //    1-3 o'clock, fading back to clear by 5 o'clock and staying
+            //    clear around the dark side.
             Circle()
                 .fill(
-                    RadialGradient(
-                        colors: [
-                            .clear,
-                            accent.opacity(0.55),
-                            accent.opacity(0.30),
-                            .clear
+                    AngularGradient(
+                        stops: [
+                            .init(color: .clear,                    location: 0.00),
+                            .init(color: .clear,                    location: 0.05),
+                            .init(color: accent.opacity(0.55),      location: 0.16),
+                            .init(color: accent.opacity(0.95),      location: 0.26),
+                            .init(color: accent,                    location: 0.30),
+                            .init(color: accent.opacity(0.85),      location: 0.36),
+                            .init(color: accent.opacity(0.40),      location: 0.46),
+                            .init(color: .clear,                    location: 0.58),
+                            .init(color: .clear,                    location: 1.00)
                         ],
-                        center: UnitPoint(x: 0.62, y: 0.38),
-                        startRadius: size * 0.42,
-                        endRadius: size * 0.95
+                        center: .center,
+                        startAngle: .degrees(-90),
+                        endAngle: .degrees(270)
                     )
                 )
-                .frame(width: size * 1.8, height: size * 1.8)
-                .blur(radius: 14)
+                .frame(width: size * 1.14, height: size * 1.14)
+                .blur(radius: size * 0.07)
                 .blendMode(.screen)
 
-            // 2. Saturn ring — BACK half, drawn before the planet body so the
-            //    body covers it for the occlusion illusion.
+            // 3. Saturn ring — back half (will be partially covered by body)
             saturnRingBack
-                .opacity(0.95)
 
-            // 3. Sphere body
+            // 4. Sphere body
             Circle()
                 .fill(
                     RadialGradient(
                         colors: [
-                            Color(pomHex: 0x4A2F90),     // bright lit side
+                            Color(pomHex: 0x4A2F90),
                             Color(pomHex: 0x261647),
-                            Color(pomHex: 0x0A0518)      // deep shadow
+                            Color(pomHex: 0x0A0518)
                         ],
                         center: UnitPoint(x: 0.72, y: 0.28),
                         startRadius: 0,
@@ -61,8 +76,7 @@ struct PlanetView: View {
                 )
                 .frame(width: size, height: size)
 
-            // 4. Limb darkening — a radial gradient from clear at center to
-            //    black on the rim, blended in to deepen the silhouette.
+            // 5. Limb darkening — deepens the rim for sphere illusion
             Circle()
                 .fill(
                     RadialGradient(
@@ -75,7 +89,7 @@ struct PlanetView: View {
                 .frame(width: size, height: size)
                 .blendMode(.multiply)
 
-            // 5. Specular highlight crescent on the upper-right
+            // 6. Specular highlight crescent on the upper-right
             Circle()
                 .fill(
                     RadialGradient(
@@ -88,47 +102,33 @@ struct PlanetView: View {
                 .frame(width: size, height: size)
                 .blendMode(.screen)
 
-            // 6. Saturn ring — FRONT half, drawn ABOVE the body so it appears
-            //    to wrap around. The back half (drawn earlier) is occluded.
+            // 7. Saturn ring — front half (only lower portion visible)
             saturnRingFront
         }
     }
 
-    // MARK: - Saturn ring (split into back / front halves for occlusion)
-
-    /// The full ring as a single ellipse stroke, used by both halves.
-    private var ringEllipse: some Shape {
-        Ellipse()
-    }
+    // MARK: - Saturn ring (split for occlusion illusion)
 
     private var ringDimensions: (w: CGFloat, h: CGFloat, tilt: Double) {
         (w: size * 1.62, h: size * 0.30, tilt: -12)
     }
 
-    /// Back half: the part of the ring that should appear behind the planet.
-    /// Rendered before the body so the body's circle covers it. Plus a tiny
-    /// peek of the very edges (left + right tips) that should still be
-    /// visible since they sit outside the body's silhouette.
     private var saturnRingBack: some View {
         let dim = ringDimensions
         return Ellipse()
-            .stroke(accent.opacity(0.90), lineWidth: 1.4)
+            .stroke(accent.opacity(0.85), lineWidth: 1.2)
             .frame(width: dim.w, height: dim.h)
             .rotationEffect(.degrees(dim.tilt))
             .shadow(color: accent.opacity(0.55), radius: 8)
     }
 
-    /// Front half: only the lower portion of the ring (which would pass
-    /// IN FRONT of the body in a 3D view). We mask the upper half away.
     private var saturnRingFront: some View {
         let dim = ringDimensions
         return Ellipse()
-            .stroke(accent.opacity(0.90), lineWidth: 1.4)
+            .stroke(accent.opacity(0.90), lineWidth: 1.2)
             .frame(width: dim.w, height: dim.h)
             .rotationEffect(.degrees(dim.tilt))
             .mask(
-                // Only the bottom half of the ring is in front of the planet.
-                // We tilt the mask to match the ring tilt so the seam looks clean.
                 Rectangle()
                     .frame(width: dim.w * 1.2, height: dim.h)
                     .offset(y: dim.h * 0.5)
