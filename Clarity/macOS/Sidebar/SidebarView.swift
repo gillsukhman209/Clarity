@@ -13,6 +13,8 @@ struct SidebarView: View {
     @State private var showSettings: Bool = false
     @Environment(TaskStore.self) private var store
 
+    private var isPomodoro: Bool { selection == .pomodoro }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             brand
@@ -23,6 +25,7 @@ struct SidebarView: View {
             VStack(alignment: .leading, spacing: AppSpacing.xs) {
                 navRow(.day, label: "Today", symbol: "calendar.day.timeline.left")
                 navRow(.calendar, label: "Calendar", symbol: "calendar")
+                navRow(.pomodoro, label: "Pomodoro", symbol: "timer")
                 navRow(.projects, label: "Projects", symbol: "square.stack.3d.up")
             }
             .padding(.horizontal, AppSpacing.sm)
@@ -36,7 +39,9 @@ struct SidebarView: View {
             .padding(AppSpacing.md)
         }
         .frame(maxHeight: .infinity, alignment: .top)
-        .background(AppColors.sidebarBackground)
+        // On Pomodoro the sidebar is transparent so the parent's pure black
+        // bleeds through, unifying it with the main column visually.
+        .background(isPomodoro ? Color.clear : AppColors.sidebarBackground)
         .sheet(isPresented: $showSettings) {
             SettingsView()
                 .environment(store)
@@ -75,16 +80,37 @@ struct SidebarView: View {
                     .font(AppTypography.bodyMedium)
                 Spacer()
             }
-            .foregroundStyle(isSelected ? AppColors.textPrimary : AppColors.textSecondary)
+            .foregroundStyle(rowForeground(isSelected: isSelected))
             .padding(.horizontal, 10)
             .padding(.vertical, 7)
             .background(
                 RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
-                    .fill(isSelected ? AppColors.surface : Color.clear)
+                    .fill(rowBackground(isSelected: isSelected))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
+                    .strokeBorder(rowBorder(isSelected: isSelected), lineWidth: 1)
             )
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+
+    private func rowForeground(isSelected: Bool) -> Color {
+        if isPomodoro {
+            return isSelected ? .white : Color.white.opacity(0.55)
+        }
+        return isSelected ? AppColors.textPrimary : AppColors.textSecondary
+    }
+
+    private func rowBackground(isSelected: Bool) -> Color {
+        guard isSelected else { return .clear }
+        return isPomodoro ? PomodoroPalette.accentSoft.opacity(0.30) : AppColors.surface
+    }
+
+    private func rowBorder(isSelected: Bool) -> Color {
+        guard isSelected, isPomodoro else { return .clear }
+        return PomodoroPalette.accent.opacity(0.35)
     }
 
     // MARK: - Settings gear

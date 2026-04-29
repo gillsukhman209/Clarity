@@ -14,6 +14,7 @@ struct ContentView: View {
     @State private var transcription = TranscriptionService()
     @State private var cloudStatus = CloudSyncStatus()
     @State private var notifications = NotificationsManager()
+    @State private var focusEngine = FocusEngine()
     @State private var showReadyBanner: Bool = false
 
     var body: some View {
@@ -23,6 +24,7 @@ struct ContentView: View {
                     .environment(store)
                     .environment(transcription)
                     .environment(cloudStatus)
+                    .environment(focusEngine)
                     .overlay(alignment: .top) {
                         VoiceReadyBanner(visible: showReadyBanner)
                             .padding(.top, 8)

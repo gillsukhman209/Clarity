@@ -13,6 +13,7 @@ import SwiftUI
 enum MacMainView: Equatable {
     case day
     case calendar
+    case pomodoro
     case projects
 }
 
@@ -27,12 +28,18 @@ struct MacRootView: View {
     @State private var currentDate: Date = Calendar.current.startOfDay(for: Date())
     @State private var mainView: MacMainView = .day
 
+    private var isPomodoro: Bool { mainView == .pomodoro }
+
     var body: some View {
         HStack(spacing: 0) {
             SidebarView(selection: $mainView)
                 .frame(width: 220)
 
-            Divider().background(AppColors.divider)
+            // Hide the dividers on Pomodoro so the panels read as one
+            // continuous black canvas (no tonal seam between sidebar / main).
+            if !isPomodoro {
+                Divider().background(AppColors.divider)
+            }
 
             mainContent
                 .frame(minWidth: 420)
@@ -60,7 +67,17 @@ struct MacRootView: View {
         .animation(.easeInOut(duration: 0.22), value: showInsights)
         .animation(.easeInOut(duration: 0.22), value: mainView)
         .frame(minWidth: 1100, minHeight: 720)
-        .background(AppColors.background)
+        // Single background for the whole window. On Pomodoro the window-
+        // wide CosmicBackdrop runs behind sidebar + main + right column so
+        // stars and nebula appear as one continuous canvas.
+        .background {
+            if isPomodoro {
+                CosmicBackdrop()
+            } else {
+                AppColors.background
+            }
+        }
+        .preferredColorScheme(isPomodoro ? .dark : nil)
         .sheet(isPresented: $showBrainDump) {
             BrainDumpFlowView()
                 .frame(minWidth: 480, minHeight: 720)
@@ -82,6 +99,8 @@ struct MacRootView: View {
                 currentDate: $currentDate,
                 onDaySelected: { mainView = .day }
             )
+        case .pomodoro:
+            PomodoroView()
         case .projects:
             ProjectListView()
         }

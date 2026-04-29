@@ -32,7 +32,7 @@ struct ClarityApp: App {
     /// problem) we log the reason and fall back to local-only storage so the
     /// app still launches.
     private static func makeContainer() -> ModelContainer {
-        let schema = Schema([TaskRecord.self, SubtaskRecord.self, ProjectRecord.self])
+        let schema = Schema([TaskRecord.self, SubtaskRecord.self, ProjectRecord.self, FocusSessionRecord.self])
 
         let cloudConfig = ModelConfiguration(
             schema: schema,

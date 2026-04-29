@@ -13,7 +13,7 @@ struct RootTabView: View {
     @State private var selectedTab: Tab = .today
     @State private var currentDate: Date = Calendar.current.startOfDay(for: Date())
 
-    private enum Tab: Hashable { case today, calendar, projects, settings }
+    private enum Tab: Hashable { case today, calendar, pomodoro, projects, settings }
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -34,6 +34,12 @@ struct RootTabView: View {
             .tabItem {
                 Label("Calendar", systemImage: "calendar")
             }
+
+            PomodoroView()
+                .tag(Tab.pomodoro)
+                .tabItem {
+                    Label("Pomodoro", systemImage: "timer")
+                }
 
             ProjectListView()
                 .tag(Tab.projects)
