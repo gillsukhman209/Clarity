@@ -11,8 +11,21 @@ import SwiftUI
 struct ProjectListView: View {
     @Environment(TaskStore.self) private var store
 
-    @State private var creating: Bool = false
-    @State private var editing: Project?
+    /// Single sheet target for both create + edit. Two separate `.sheet`
+    /// modifiers on the same view fight for presentation, which is why
+    /// "+" did nothing once at least one project existed.
+    enum EditorPresentation: Identifiable {
+        case create
+        case edit(Project)
+        var id: String {
+            switch self {
+            case .create:        return "create"
+            case .edit(let p):   return p.id.uuidString
+            }
+        }
+    }
+
+    @State private var editorPresentation: EditorPresentation?
     @State private var showArchived: Bool = false
     @State private var pendingDelete: Project?
 
@@ -33,7 +46,7 @@ struct ProjectListView: View {
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button {
-                        creating = true
+                        editorPresentation = .create
                     } label: {
                         Image(systemName: "plus")
                             .font(.system(size: 14, weight: .bold))
@@ -41,13 +54,15 @@ struct ProjectListView: View {
                     .accessibilityLabel("New project")
                 }
             }
-            .sheet(isPresented: $creating) {
-                ProjectEditorSheet(editing: nil)
-                    .environment(store)
-            }
-            .sheet(item: $editing) { project in
-                ProjectEditorSheet(editing: project)
-                    .environment(store)
+            .sheet(item: $editorPresentation) { presentation in
+                switch presentation {
+                case .create:
+                    ProjectEditorSheet(editing: nil)
+                        .environment(store)
+                case .edit(let project):
+                    ProjectEditorSheet(editing: project)
+                        .environment(store)
+                }
             }
             .confirmationDialog(
                 "Delete project?",
@@ -113,7 +128,7 @@ struct ProjectListView: View {
     @ViewBuilder
     private func menu(for project: Project, archived: Bool) -> some View {
         Button {
-            editing = project
+            editorPresentation = .edit(project)
         } label: {
             Label("Edit", systemImage: "pencil")
         }
@@ -173,7 +188,7 @@ struct ProjectListView: View {
                 .foregroundStyle(AppColors.textSecondary)
                 .multilineTextAlignment(.center)
             Button {
-                creating = true
+                editorPresentation = .create
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "plus")

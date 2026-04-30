@@ -177,6 +177,9 @@ struct SessionsListCard: View {
 
 struct ModePickerCard: View {
     @Binding var selected: FocusMode
+    @Environment(FocusSettings.self) private var settings
+
+    @State private var editingMode: FocusMode? = nil
 
     var body: some View {
         DarkPanel {
@@ -187,44 +190,68 @@ struct ModePickerCard: View {
                     .foregroundStyle(.white.opacity(0.55))
 
                 ForEach(FocusMode.allCases) { mode in
-                    Button {
-                        withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
-                            selected = mode
-                        }
-                    } label: {
-                        modeRow(mode, isSelected: selected == mode)
-                    }
-                    .buttonStyle(.plain)
+                    modeRow(mode, isSelected: selected == mode)
                 }
             }
+        }
+        .popover(item: $editingMode, arrowEdge: .leading) { mode in
+            FocusDurationsEditor(mode: mode)
+                .environment(settings)
         }
     }
 
     private func modeRow(_ mode: FocusMode, isSelected: Bool) -> some View {
-        HStack(spacing: 10) {
-            ZStack {
-                Circle()
-                    .stroke(isSelected ? PomodoroPalette.accent : Color.white.opacity(0.18), lineWidth: isSelected ? 1.5 : 1)
-                    .frame(width: 30, height: 30)
-                    .background(Circle().fill(isSelected ? PomodoroPalette.accent.opacity(0.15) : Color.white.opacity(0.04)))
-                Image(systemName: mode.sfSymbol)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(isSelected ? PomodoroPalette.accent : Color.white.opacity(0.6))
+        let durations = settings.durations(for: mode)
+        return HStack(spacing: 10) {
+            // Tappable left side selects the mode
+            Button {
+                withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
+                    selected = mode
+                }
+            } label: {
+                HStack(spacing: 10) {
+                    ZStack {
+                        Circle()
+                            .stroke(isSelected ? PomodoroPalette.accent : Color.white.opacity(0.18),
+                                    lineWidth: isSelected ? 1.5 : 1)
+                            .frame(width: 30, height: 30)
+                            .background(Circle().fill(isSelected ? PomodoroPalette.accent.opacity(0.15) : Color.white.opacity(0.04)))
+                        Image(systemName: mode.sfSymbol)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(isSelected ? PomodoroPalette.accent : Color.white.opacity(0.6))
+                    }
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(mode.title)
+                            .font(.system(size: 13, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.white)
+                        Text(durations.subtitle)
+                            .font(.system(size: 11, weight: .regular, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.55))
+                    }
+                    Spacer()
+                    if isSelected {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(PomodoroPalette.accent)
+                    }
+                }
+                .contentShape(Rectangle())
             }
-            VStack(alignment: .leading, spacing: 1) {
-                Text(mode.title)
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white)
-                Text(mode.subtitle)
-                    .font(.system(size: 11, weight: .regular, design: .rounded))
+            .buttonStyle(.plain)
+
+            // Edit pencil — opens the durations editor for this mode
+            Button {
+                editingMode = mode
+            } label: {
+                Image(systemName: "slider.horizontal.3")
+                    .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.55))
+                    .frame(width: 26, height: 26)
+                    .background(Circle().fill(Color.white.opacity(0.05)))
+                    .overlay(Circle().stroke(Color.white.opacity(0.10), lineWidth: 1))
             }
-            Spacer()
-            if isSelected {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(PomodoroPalette.accent)
-            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Customize \(mode.title) durations")
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 9)

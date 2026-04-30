@@ -25,6 +25,8 @@ struct TaskEditView: View {
     @State private var durationMinutes: Int = 0
     @State private var projectID: UUID? = nil
 
+    @State private var showDatePopover: Bool = false
+    @State private var showTimePopover: Bool = false
     @State private var loaded: Bool = false
 
     var body: some View {
@@ -208,27 +210,71 @@ struct TaskEditView: View {
                     .font(.system(size: 12, weight: .medium, design: .rounded))
                     .foregroundStyle(AppColors.textSecondary)
             }
-            // Native compact picker — clean, fully interactive on both
-            // platforms. Switches between date-only and date+time as the
-            // toggle flips so the user always has a working control.
-            DatePicker(
-                "",
-                selection: $startDate,
-                displayedComponents: hasTime ? [.date, .hourAndMinute] : [.date]
-            )
-            .datePickerStyle(.compact)
-            .labelsHidden()
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(AppColors.surface)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(AppColors.border.opacity(0.7), lineWidth: 1)
-            )
+            HStack(spacing: 8) {
+                datePill
+                if hasTime { timePill }
+                Spacer(minLength: 0)
+            }
         }
+    }
+
+    private var datePill: some View {
+        Button { showDatePopover.toggle() } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "calendar")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(AppColors.accent)
+                Text(dateString)
+                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                    .foregroundStyle(AppColors.textPrimary)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(Capsule(style: .continuous).fill(AppColors.surface))
+            .overlay(Capsule(style: .continuous).stroke(AppColors.border.opacity(0.7), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .popover(isPresented: $showDatePopover, arrowEdge: .bottom) {
+            DatePicker("", selection: $startDate, displayedComponents: .date)
+                .datePickerStyle(.graphical)
+                .labelsHidden()
+                .frame(minWidth: 280, minHeight: 280)
+                .padding(12)
+        }
+    }
+
+    private var timePill: some View {
+        Button { showTimePopover.toggle() } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "clock")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(AppColors.accent)
+                Text(timeString)
+                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                    .foregroundStyle(AppColors.textPrimary)
+                    .monospacedDigit()
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(Capsule(style: .continuous).fill(AppColors.surface))
+            .overlay(Capsule(style: .continuous).stroke(AppColors.border.opacity(0.7), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .popover(isPresented: $showTimePopover, arrowEdge: .bottom) {
+            TimeWheelsPicker(date: $startDate)
+        }
+    }
+
+    private var dateString: String {
+        let f = DateFormatter()
+        f.dateFormat = "EEE, MMM d"
+        return f.string(from: startDate)
+    }
+
+    private var timeString: String {
+        let f = DateFormatter()
+        f.dateFormat = "h:mm a"
+        return f.string(from: startDate)
     }
 
     // MARK: - Duration (uniform-width chips, no stepper)

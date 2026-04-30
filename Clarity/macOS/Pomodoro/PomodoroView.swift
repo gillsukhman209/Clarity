@@ -26,6 +26,8 @@ struct PomodoroView: View {
     @Environment(FocusEngine.self) private var engine
     @Environment(TaskStore.self) private var store
 
+    @State private var showTaskPicker: Bool = false
+
     var body: some View {
         // No background fill here — MacRootView provides the unified
         // PomodoroPalette.space across the whole window when on this tab.
@@ -37,6 +39,13 @@ struct PomodoroView: View {
         }
         .padding(.horizontal, 28)
         .padding(.vertical, 22)
+        .sheet(isPresented: $showTaskPicker) {
+            FocusTaskPickerSheet(currentTaskID: engine.boundTaskID) { task in
+                engine.boundTaskID = task?.id
+                engine.boundTaskTitle = task?.title
+            }
+            .environment(store)
+        }
     }
 
     // MARK: - Main column
@@ -48,6 +57,8 @@ struct PomodoroView: View {
 
             // Cosmic hero — bleeds edge-to-edge against the same black as the
             // rest of the app, so there's no visible card outline around it.
+            // Each tick advances the engine: when a phase ends the engine
+            // auto-rolls to the next phase and logs the session.
             TimelineView(.periodic(from: .now, by: 1)) { context in
                 CosmicHero(
                     phase: engine.phase,
@@ -61,6 +72,8 @@ struct PomodoroView: View {
                         engine.start(taskID: task?.id, taskTitle: task?.title)
                     }
                 )
+                .onAppear { engine.tick(at: context.date) }
+                .onChange(of: context.date) { _, new in engine.tick(at: new) }
             }
             .frame(minHeight: 360)
             .frame(maxHeight: .infinity)
@@ -83,7 +96,7 @@ struct PomodoroView: View {
                 task: boundTask,
                 projectName: boundProject?.name,
                 projectColor: boundProject?.accentColor,
-                onPick: { /* hook task picker in next pass */ }
+                onPick: { showTaskPicker = true }
             )
         }
     }
@@ -113,25 +126,71 @@ struct PomodoroView: View {
 
     private var topBar: some View {
         HStack(spacing: 16) {
+            taskTitleButton
+            Spacer()
+            modeSegmented.frame(maxWidth: 280)
+            Spacer()
+            optionsMenu
+        }
+    }
+
+    /// Tappable title that opens the task picker. When a task is bound,
+    /// show its title; otherwise the mode title as a sensible default.
+    private var taskTitleButton: some View {
+        Button { showTaskPicker = true } label: {
             HStack(spacing: 6) {
-                Text(engine.mode.title)
+                Text(engine.boundTaskTitle ?? engine.mode.title)
                     .font(.system(size: 22, weight: .semibold, design: .rounded))
                     .foregroundStyle(.white)
+                    .lineLimit(1)
                 Image(systemName: "chevron.down")
                     .font(.system(size: 11, weight: .bold))
                     .foregroundStyle(.white.opacity(0.55))
             }
-
-            Spacer()
-
-            modeSegmented
-                .frame(maxWidth: 280)
-
-            Spacer()
-
-            iconButton(symbol: "music.note") { /* ambient audio - next pass */ }
-            iconButton(symbol: "ellipsis")    { /* options menu - next pass */ }
         }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Pick a task to focus on")
+    }
+
+    /// Three-dot menu for actions that don't need their own toolbar slot:
+    /// pick task, skip phase, end session. All wired to real engine
+    /// operations — no mock entries.
+    private var optionsMenu: some View {
+        Menu {
+            Button {
+                showTaskPicker = true
+            } label: {
+                Label(engine.boundTaskTitle == nil ? "Pick a task" : "Change task",
+                      systemImage: "text.badge.checkmark")
+            }
+            if engine.hasActiveSession {
+                Button {
+                    if engine.phase == .focus {
+                        // Skip the focus → break flips. We do NOT log a
+                        // partial session for a skipped focus phase, since
+                        // the user explicitly bailed.
+                    }
+                    engine.advancePhase()
+                } label: {
+                    Label("Skip to next phase", systemImage: "forward.end")
+                }
+                Button(role: .destructive) {
+                    engine.endSession()
+                } label: {
+                    Label("End session", systemImage: "stop.circle")
+                }
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.75))
+                .frame(width: 34, height: 34)
+                .background(Circle().fill(Color.white.opacity(0.04)))
+                .overlay(Circle().stroke(Color.white.opacity(0.10), lineWidth: 1))
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
     }
 
     private var modeSegmented: some View {
@@ -164,18 +223,6 @@ struct PomodoroView: View {
                     Capsule(style: .continuous)
                         .stroke(isOn ? PomodoroPalette.accent.opacity(0.5) : Color.clear, lineWidth: 1)
                 )
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func iconButton(symbol: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.75))
-                .frame(width: 34, height: 34)
-                .background(Circle().fill(Color.white.opacity(0.04)))
-                .overlay(Circle().stroke(Color.white.opacity(0.10), lineWidth: 1))
         }
         .buttonStyle(.plain)
     }

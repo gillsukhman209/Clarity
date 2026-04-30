@@ -15,6 +15,8 @@ struct PomodoroView: View {
     @Environment(FocusEngine.self) private var engine
     @Environment(TaskStore.self) private var store
 
+    @State private var showTaskPicker: Bool = false
+
     var body: some View {
         ZStack {
             // Cosmic atmosphere runs behind the entire scroll view —
@@ -40,6 +42,8 @@ struct PomodoroView: View {
                                 engine.start(taskID: task?.id, taskTitle: task?.title)
                             }
                         )
+                        .onAppear { engine.tick(at: context.date) }
+                        .onChange(of: context.date) { _, new in engine.tick(at: new) }
                     }
                     .frame(height: 380)
                     .padding(.horizontal, 16)
@@ -62,7 +66,8 @@ struct PomodoroView: View {
                     CurrentTaskCard(
                         task: boundTask,
                         projectName: boundProject?.name,
-                        projectColor: boundProject?.accentColor
+                        projectColor: boundProject?.accentColor,
+                        onPick: { showTaskPicker = true }
                     )
                     .padding(.horizontal, 16)
 
@@ -77,6 +82,15 @@ struct PomodoroView: View {
         }
         .preferredColorScheme(.dark)
         .toolbar(.hidden, for: .navigationBar)
+        .sheet(isPresented: $showTaskPicker) {
+            FocusTaskPickerSheet(currentTaskID: engine.boundTaskID) { task in
+                engine.boundTaskID = task?.id
+                engine.boundTaskTitle = task?.title
+            }
+            .environment(store)
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
     }
 
     @ViewBuilder
@@ -92,14 +106,20 @@ struct PomodoroView: View {
 
     private var topBar: some View {
         HStack(spacing: 12) {
-            HStack(spacing: 6) {
-                Text(engine.mode.title)
-                    .font(.system(size: 22, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white)
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(.white.opacity(0.55))
+            Button {
+                showTaskPicker = true
+            } label: {
+                HStack(spacing: 6) {
+                    Text(engine.boundTaskTitle ?? engine.mode.title)
+                        .font(.system(size: 22, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.white.opacity(0.55))
+                }
             }
+            .buttonStyle(.plain)
             Spacer()
             modeSegmented
         }

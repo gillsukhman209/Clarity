@@ -15,6 +15,7 @@ struct ContentView: View {
     @State private var cloudStatus = CloudSyncStatus()
     @State private var notifications = NotificationsManager()
     @State private var focusEngine = FocusEngine()
+    @State private var focusSettings = FocusSettings()
     @State private var showReadyBanner: Bool = false
 
     var body: some View {
@@ -25,6 +26,7 @@ struct ContentView: View {
                     .environment(transcription)
                     .environment(cloudStatus)
                     .environment(focusEngine)
+                    .environment(focusSettings)
                     .overlay(alignment: .top) {
                         VoiceReadyBanner(visible: showReadyBanner)
                             .padding(.top, 8)
@@ -51,7 +53,16 @@ struct ContentView: View {
         .preferredColorScheme(appearance.colorScheme)
         .task {
             if store == nil {
-                store = TaskStore(context: context, notifications: notifications)
+                let s = TaskStore(context: context, notifications: notifications)
+                store = s
+                // Wire FocusEngine ↔ store: seed today's persisted sessions
+                // into the engine, persist any new sessions back, and let
+                // the engine read user-customized durations from settings.
+                focusEngine.todaysSessions = s.todaysFocusSessions()
+                focusEngine.onSessionComplete = { [weak s] session in
+                    s?.recordFocusSession(session)
+                }
+                focusEngine.settings = focusSettings
             }
             async let prep: Void = transcription.prepareIfNeeded()
             async let cloud: Void = cloudStatus.refresh()
@@ -62,6 +73,12 @@ struct ContentView: View {
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
                 store?.reload()
+                // Re-seed today's focus sessions on foreground in case the
+                // app was backgrounded across a day boundary or another
+                // device logged sessions via CloudKit.
+                if let s = store {
+                    focusEngine.todaysSessions = s.todaysFocusSessions()
+                }
                 Task { await cloudStatus.refresh() }
             }
         }

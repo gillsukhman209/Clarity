@@ -240,6 +240,37 @@ final class TaskStore {
         refresh()
     }
 
+    // MARK: - Focus sessions (Pomodoro / Deep Work)
+
+    /// Persist a completed focus session. Called by FocusEngine via the
+    /// `onSessionComplete` callback wired in ContentView.
+    func recordFocusSession(_ session: FocusSession) {
+        let record = FocusSessionRecord(
+            id: session.id,
+            taskID: session.taskID,
+            taskTitle: session.taskTitle,
+            mode: session.mode,
+            startedAt: session.startedAt,
+            completedAt: session.completedAt,
+            focusMinutes: session.focusMinutes
+        )
+        context.insert(record)
+        save()
+    }
+
+    /// Fetch every focus session that started today, sorted by `startedAt`.
+    /// Used to seed the engine's `todaysSessions` on launch.
+    func todaysFocusSessions() -> [FocusSession] {
+        let cal = Calendar.current
+        let dayStart = cal.startOfDay(for: Date())
+        guard let dayEnd = cal.date(byAdding: .day, value: 1, to: dayStart) else { return [] }
+        let descriptor = FetchDescriptor<FocusSessionRecord>(
+            predicate: #Predicate { $0.startedAt >= dayStart && $0.startedAt < dayEnd },
+            sortBy: [SortDescriptor(\.startedAt)]
+        )
+        return ((try? context.fetch(descriptor)) ?? []).map { $0.toDomain() }
+    }
+
     func toggleSubtask(taskID: UUID, subtaskID: UUID) {
         guard let record = fetchRecord(taskID),
               let sub = (record.subtasks ?? []).first(where: { $0.id == subtaskID })
