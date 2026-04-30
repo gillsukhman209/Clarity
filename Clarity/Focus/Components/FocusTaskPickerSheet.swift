@@ -41,7 +41,9 @@ struct FocusTaskPickerSheet: View {
                 }
             }
         }
+        #if os(macOS)
         .frame(minWidth: 380, idealWidth: 440, minHeight: 380)
+        #endif
         .background(AppColors.background)
     }
 

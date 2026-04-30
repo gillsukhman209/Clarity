@@ -17,6 +17,12 @@
 
 import Foundation
 import Observation
+#if canImport(UIKit)
+import UIKit
+import AudioToolbox
+#elseif canImport(AppKit)
+import AppKit
+#endif
 
 @Observable
 @MainActor
@@ -33,6 +39,11 @@ final class FocusEngine {
     /// mode's `FocusDurations` from here on every tick so saved edits take
     /// effect on the next phase.
     @ObservationIgnored var settings: FocusSettings? = nil
+
+    /// Schedules / cancels the local notification that fires when the
+    /// active phase ends (banner + sound, whether app is foreground or
+    /// background). Wired up in ContentView.
+    @ObservationIgnored var notifier: FocusPhaseNotifier? = nil
 
     /// Resolved durations for the current mode. Falls back to the built-in
     /// defaults if settings haven't been wired yet (e.g. previews).
@@ -131,16 +142,20 @@ final class FocusEngine {
         phase = .focus
         cyclesCompleted = 0
         phaseStartedAt = Date()
+        scheduleNextPhaseEndNotification()
     }
 
-    /// Toggle the run/pause state. No-op if no active session.
+    /// Toggle the run/pause state. No-op if no active session. Cancels the
+    /// pending notification while paused; reschedules on resume.
     func togglePause() {
         guard sessionStartedAt != nil else { return }
         if let pausedAt {
             accumulatedPause += Date().timeIntervalSince(pausedAt)
             self.pausedAt = nil
+            scheduleNextPhaseEndNotification()
         } else {
             pausedAt = Date()
+            notifier?.cancel()
         }
     }
 
@@ -162,20 +177,65 @@ final class FocusEngine {
         cyclesCompleted = 0
         boundTaskID = nil
         boundTaskTitle = nil
+        notifier?.cancel()
     }
 
     /// Pulse called every second by the view's TimelineView. Detects when
-    /// the active phase has run out and auto-advances. Logs a session when
-    /// a focus phase completes.
+    /// the active phase has run out and auto-advances, plays in-app
+    /// haptic, logs a focus session if applicable, and reschedules the
+    /// next phase-end notification.
     func tick(at now: Date = Date()) {
         guard hasActiveSession, !isPaused else { return }
         guard phase != .complete else { return }
         guard remainingSeconds(at: now) <= 0 else { return }
 
+        playPhaseEndFeedback()
         if phase == .focus {
             logFocusSession(focusMinutes: currentDurations.focusMinutes, completedAt: now)
         }
         advancePhase()
+        scheduleNextPhaseEndNotification()
+    }
+
+    // MARK: - Notification + feedback wiring
+
+    private func scheduleNextPhaseEndNotification() {
+        guard let notifier else { return }
+        guard hasActiveSession, !isPaused, phase != .complete else {
+            notifier.cancel()
+            return
+        }
+        let secondsLeft = remainingSeconds()
+        notifier.schedule(
+            in: secondsLeft,
+            endingPhase: phase,
+            nextPhase: nextPhasePreview(from: phase),
+            taskTitle: boundTaskTitle
+        )
+    }
+
+    /// Predicts what `advancePhase` would land on without mutating state —
+    /// used by the notifier to write a useful body ("Time to focus on X").
+    private func nextPhasePreview(from current: FocusPhase) -> FocusPhase {
+        switch current {
+        case .focus:
+            let nextCycles = cyclesCompleted + 1
+            if nextCycles >= currentDurations.cyclesBeforeLongBreak { return .complete }
+            return nextCycles % 2 == 0 ? .longBreak : .shortBreak
+        case .shortBreak, .longBreak: return .focus
+        case .complete:               return .complete
+        }
+    }
+
+    private func playPhaseEndFeedback() {
+        #if canImport(UIKit)
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        // Notification.default sound (1322) — short pleasant chime.
+        AudioServicesPlaySystemSound(1322)
+        #elseif canImport(AppKit)
+        // System chime; macOS Glass is the closest to a Pomodoro "ding".
+        NSSound(named: "Glass")?.play()
+        #endif
     }
 
     private func logFocusSession(focusMinutes: Int, completedAt: Date) {

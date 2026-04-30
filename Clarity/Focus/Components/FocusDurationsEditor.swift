@@ -57,7 +57,11 @@ struct FocusDurationsEditor: View {
             footer
         }
         .padding(18)
+        #if os(macOS)
         .frame(width: 320)
+        #else
+        .frame(maxWidth: 360)
+        #endif
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(AppColors.background)

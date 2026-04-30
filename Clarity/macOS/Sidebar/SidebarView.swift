@@ -10,7 +10,7 @@ import SwiftUI
 
 struct SidebarView: View {
     @Binding var selection: MacMainView
-    @State private var showSettings: Bool = false
+    @AppStorage("appearance") private var appearance: AppearancePreference = .light
     @Environment(TaskStore.self) private var store
 
     private var isPomodoro: Bool { selection == .pomodoro }
@@ -33,8 +33,8 @@ struct SidebarView: View {
             Spacer(minLength: 0)
 
             HStack {
+                appearanceToggle
                 Spacer()
-                settingsButton
             }
             .padding(AppSpacing.md)
         }
@@ -42,10 +42,6 @@ struct SidebarView: View {
         // On Pomodoro the sidebar is transparent so the parent's pure black
         // bleeds through, unifying it with the main column visually.
         .background(isPomodoro ? Color.clear : AppColors.sidebarBackground)
-        .sheet(isPresented: $showSettings) {
-            SettingsView()
-                .environment(store)
-        }
     }
 
     // MARK: - Brand
@@ -113,18 +109,40 @@ struct SidebarView: View {
         return PomodoroPalette.accent.opacity(0.35)
     }
 
-    // MARK: - Settings gear
-    private var settingsButton: some View {
-        HoverScaleButton(action: { showSettings = true }, hoverScale: 1.08) {
-            Image(systemName: "gearshape")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(AppColors.textSecondary)
-                .frame(width: 26, height: 26)
-                .background(
-                    Circle().fill(AppColors.surface.opacity(0.0001))
-                )
+    // MARK: - Appearance toggle (bottom-left)
+    /// Compact light/dark switch. The icon shows the appearance you'll
+    /// switch TO (sun when in dark, moon when in light) so the action is
+    /// self-explanatory.
+    private var appearanceToggle: some View {
+        HoverScaleButton(
+            action: {
+                withAnimation(.easeInOut(duration: 0.22)) {
+                    appearance = appearance.toggled
+                }
+            },
+            hoverScale: 1.08
+        ) {
+            HStack(spacing: 8) {
+                Image(systemName: appearance.toggled.icon)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(isPomodoro ? .white : AppColors.textPrimary)
+                    .frame(width: 18)
+                Text(appearance.toggled.label)
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .foregroundStyle(isPomodoro ? Color.white.opacity(0.85) : AppColors.textSecondary)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(isPomodoro ? Color.white.opacity(0.06) : AppColors.surface)
+            )
+            .overlay(
+                Capsule(style: .continuous)
+                    .stroke(isPomodoro ? Color.white.opacity(0.12) : AppColors.border, lineWidth: 1)
+            )
         }
-        .accessibilityLabel("Settings")
+        .accessibilityLabel("Switch to \(appearance.toggled.label) mode")
     }
 }
 #endif

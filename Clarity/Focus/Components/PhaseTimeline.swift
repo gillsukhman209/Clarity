@@ -42,7 +42,11 @@ struct PhaseTimeline: View {
                 .foregroundStyle(.white.opacity(0.45))
                 .monospacedDigit()
         }
+        #if os(macOS)
         .frame(width: 80)
+        #else
+        .frame(width: 64)
+        #endif
     }
 
     private func badge(for phase: FocusPhase, isCurrent: Bool, isPast: Bool) -> some View {
@@ -101,6 +105,10 @@ struct PhaseTimeline: View {
                     .frame(width: 3, height: 3)
             }
         }
+        #if os(macOS)
         .frame(width: 60)
+        #else
+        .frame(width: 36)
+        #endif
     }
 }

@@ -18,6 +18,7 @@ struct DayPlanView: View {
     /// Shared with the macOS dashboard via the same UserDefaults key.
     /// ON = grouped by section (default). OFF = flat chronological.
     @AppStorage("dashboardGroupBySection") private var groupBySection: Bool = true
+    @AppStorage("appearance") private var appearance: AppearancePreference = .light
     /// Per-project visibility for Today. JSON-encoded `[UUID]` of projects
     /// the user has hidden. Free-floating tasks (no project) always show.
     /// Shared with macOS via the same UserDefaults key.
@@ -242,6 +243,19 @@ struct DayPlanView: View {
             .accessibilityLabel(groupBySection ? "Switch to time-sorted view" : "Switch to grouped view")
 
             projectVisibilityMenu
+
+            Button {
+                withAnimation(.easeInOut(duration: 0.22)) {
+                    appearance = appearance.toggled
+                }
+            } label: {
+                Image(systemName: appearance.toggled.icon)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(AppColors.textSecondary)
+                    .frame(width: 36, height: 36)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Switch to \(appearance.toggled.label) mode")
         }
         .padding(.horizontal, AppSpacing.lg)
         .padding(.vertical, AppSpacing.sm)

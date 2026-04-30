@@ -9,13 +9,14 @@ import SwiftData
 struct ContentView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.scenePhase) private var scenePhase
-    @AppStorage("appearance") private var appearance: AppearancePreference = .system
+    @AppStorage("appearance") private var appearance: AppearancePreference = .light
     @State private var store: TaskStore?
     @State private var transcription = TranscriptionService()
     @State private var cloudStatus = CloudSyncStatus()
     @State private var notifications = NotificationsManager()
     @State private var focusEngine = FocusEngine()
     @State private var focusSettings = FocusSettings()
+    @State private var focusNotifier = FocusPhaseNotifier()
     @State private var showReadyBanner: Bool = false
 
     var body: some View {
@@ -63,6 +64,7 @@ struct ContentView: View {
                     s?.recordFocusSession(session)
                 }
                 focusEngine.settings = focusSettings
+                focusEngine.notifier = focusNotifier
             }
             async let prep: Void = transcription.prepareIfNeeded()
             async let cloud: Void = cloudStatus.refresh()

@@ -38,7 +38,9 @@ struct TaskEditView: View {
                 missing
             }
         }
+        #if os(macOS)
         .frame(minWidth: 480, idealWidth: 540, minHeight: 600)
+        #endif
         .background(AppColors.background)
     }
 

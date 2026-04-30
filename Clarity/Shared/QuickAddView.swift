@@ -57,7 +57,9 @@ struct QuickAddView: View {
             footer
         }
         .padding(AppSpacing.lg)
+        #if os(macOS)
         .frame(minWidth: 420, idealWidth: 520, minHeight: 320)
+        #endif
         .background(AppColors.background)
         .onAppear {
             placeholder = placeholders.randomElement() ?? ""

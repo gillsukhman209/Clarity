@@ -2,22 +2,27 @@
 //  AppDelegate.swift
 //  Clarity
 //
-//  Registers the app for silent remote notifications so SwiftData + CloudKit
-//  can wake us up to pull down changes pushed from other devices. Without this,
-//  cross-device sync only happens on cold launch / foreground.
+//  Two responsibilities:
+//   1. Register for remote notifications so SwiftData + CloudKit can wake
+//      the app to pull pushes from other devices.
+//   2. Act as `UNUserNotificationCenterDelegate` so locally-scheduled
+//      notifications (Pomodoro phase end, task start) deliver a banner +
+//      sound even while the app is in the foreground.
 //
 
 import Foundation
+import UserNotifications
 
 #if canImport(UIKit)
 import UIKit
 
-final class AppDelegate: NSObject, UIApplicationDelegate {
+final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     func application(
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         application.registerForRemoteNotifications()
+        UNUserNotificationCenter.current().delegate = self
         return true
     }
 
@@ -25,7 +30,6 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
     ) {
-        // CloudKit / SwiftData consume the token internally via NSPersistentCloudKitContainer.
         print("✓ Registered for remote notifications (\(deviceToken.count) bytes)")
     }
 
@@ -35,14 +39,26 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     ) {
         print("⚠️ Remote notification registration failed: \(error.localizedDescription)")
     }
+
+    /// Show banner + play sound for our own local notifications even when
+    /// the app is in the foreground. Without this, a Pomodoro phase ending
+    /// while the user is looking at the timer would silently do nothing.
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .sound, .list])
+    }
 }
 
 #elseif canImport(AppKit)
 import AppKit
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApplication.shared.registerForRemoteNotifications()
+        UNUserNotificationCenter.current().delegate = self
     }
 
     func application(
@@ -57,6 +73,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         didFailToRegisterForRemoteNotificationsWithError error: Error
     ) {
         print("⚠️ Remote notification registration failed: \(error.localizedDescription)")
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .sound, .list])
     }
 }
 #endif

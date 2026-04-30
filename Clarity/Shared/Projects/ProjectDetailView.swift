@@ -19,7 +19,13 @@ struct ProjectDetailView: View {
     @State private var addTargetStatus: TaskBoardStatus = .upcoming
     @State private var presentedTaskID: UUID?
     @State private var showEditProject: Bool = false
-    @State private var showBrainDump: Bool = false
+    /// Frames of each kanban column in the `"kanbanBoard"` coordinate space.
+    /// Cards report their drop location and we hit-test against this map.
+    @State private var columnFrames: [TaskBoardStatus: CGRect] = [:]
+    /// The status (column) that currently has a lifted/dragging card. We
+    /// raise that column's zIndex so the floating card draws on top of its
+    /// siblings instead of being hidden by the next HStack child.
+    @State private var draggingFromStatus: TaskBoardStatus? = nil
     @FocusState private var quickFocused: Bool
 
     private var project: Project? { store.project(with: projectID) }
@@ -76,16 +82,6 @@ struct ProjectDetailView: View {
                 .presentationDragIndicator(.visible)
                 #endif
         }
-        #if os(iOS)
-        .fullScreenCover(isPresented: $showBrainDump) {
-            BrainDumpFlowView(projectID: projectID)
-        }
-        #else
-        .sheet(isPresented: $showBrainDump) {
-            BrainDumpFlowView(projectID: projectID)
-                .frame(minWidth: 480, minHeight: 720)
-        }
-        #endif
     }
 
     // MARK: - Header
@@ -110,7 +106,6 @@ struct ProjectDetailView: View {
                     .foregroundStyle(AppColors.textSecondary)
             }
             Spacer()
-            brainDumpButton
             menuButton(project)
         }
     }
@@ -126,23 +121,6 @@ struct ProjectDetailView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Back to projects")
-    }
-
-    private var brainDumpButton: some View {
-        Button { showBrainDump = true } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "mic.fill")
-                    .font(.system(size: 11, weight: .semibold))
-                Text("Brain dump")
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
-            }
-            .foregroundStyle(AppColors.accent)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
-            .background(Capsule().fill(AppColors.accentSoft.opacity(0.45)))
-            .overlay(Capsule().stroke(AppColors.accent.opacity(0.3), lineWidth: 1))
-        }
-        .buttonStyle(.plain)
     }
 
     private func menuButton(_ project: Project) -> some View {
@@ -219,6 +197,17 @@ struct ProjectDetailView: View {
             }
             .padding(.horizontal, AppSpacing.lg)
         }
+        // Don't clip the outer scroll either — the dragging-column zIndex
+        // raise plus this ensures a lifted card draws on top of everything,
+        // including the columns rendered later in the HStack.
+        .scrollClipDisabled()
+        // Coordinate space the columns publish their frames into and the
+        // card gesture reads its drop location from. Same name on both ends
+        // means a simple `frame.contains(location)` check works.
+        .coordinateSpace(name: "kanbanBoard")
+        .onPreferenceChange(KanbanColumnFramesKey.self) { newFrames in
+            columnFrames = newFrames
+        }
         #if os(iOS)
         .scrollTargetBehavior(.viewAligned)
         #endif
@@ -230,11 +219,7 @@ struct ProjectDetailView: View {
             status: status,
             tasks: tasks,
             onTapTask: { presentedTaskID = $0 },
-            onDrop: { droppedID in
-                withAnimation(.spring(response: 0.34, dampingFraction: 0.82)) {
-                    store.setBoardStatus(status, for: droppedID)
-                }
-            },
+            onCardDrop: { taskID, location in handleDrop(taskID: taskID, at: location) },
             onAddInline: {
                 addTargetStatus = status
                 quickFocused = true
@@ -248,12 +233,34 @@ struct ProjectDetailView: View {
                 withAnimation(.easeInOut(duration: 0.2)) {
                     store.delete(taskID)
                 }
+            },
+            onCardLiftedChange: { lifted in
+                draggingFromStatus = lifted ? status : nil
             }
         )
         .frame(width: columnWidth)
+        // Raise the dragging column above its siblings so the floating card
+        // is drawn over later HStack children (Working on, Done, etc.)
+        // rather than disappearing behind them.
+        .zIndex(draggingFromStatus == status ? 100 : 0)
         #if os(iOS)
         .containerRelativeFrame(.horizontal)
         #endif
+    }
+
+    /// Hit-test the drop location against captured column frames. If the
+    /// finger ended up inside a column other than the task's current one,
+    /// move the task there.
+    private func handleDrop(taskID: UUID, at location: CGPoint) {
+        for (status, frame) in columnFrames {
+            if frame.contains(location) {
+                withAnimation(.spring(response: 0.34, dampingFraction: 0.82)) {
+                    store.setBoardStatus(status, for: taskID)
+                }
+                return
+            }
+        }
+        // Dropped outside any column — no-op (card snaps back visually).
     }
 
     /// On macOS we want all three columns visible side-by-side; on iOS we
@@ -304,52 +311,62 @@ private struct KanbanColumn: View {
     let status: TaskBoardStatus
     let tasks: [PlanTask]
     var onTapTask: (UUID) -> Void
-    var onDrop: (UUID) -> Void
+    /// Called on every card drop. Args: dragged task id + finger location
+    /// in the board's coordinate space.
+    var onCardDrop: (UUID, CGPoint) -> Void
     var onAddInline: () -> Void
     var onMoveTask: (UUID, TaskBoardStatus) -> Void
     var onDeleteTask: (UUID) -> Void
-
-    @State private var isTargeted: Bool = false
+    /// Forwarded to the parent so it can raise this column's zIndex while a
+    /// card here is in drag mode.
+    var onCardLiftedChange: (Bool) -> Void = { _ in }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             header
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 8) {
+                    // (clip disabled below — see `.scrollClipDisabled()`)
                     if tasks.isEmpty {
                         emptyHint
                     } else {
                         ForEach(tasks) { task in
-                            KanbanCard(task: task)
-                                .draggable(DraggedTask(taskID: task.id))
-                                .onTapGesture { onTapTask(task.id) }
-                                .contextMenu {
-                                    Button {
-                                        onTapTask(task.id)
-                                    } label: {
-                                        Label("Edit", systemImage: "pencil")
-                                    }
-                                    Divider()
-                                    ForEach(TaskBoardStatus.allCases) { other in
-                                        if other != status {
-                                            Button {
-                                                onMoveTask(task.id, other)
-                                            } label: {
-                                                Label("Move to \(other.title)", systemImage: other.sfSymbol)
-                                            }
+                            KanbanCardGesture(
+                                onTap: { onTapTask(task.id) },
+                                onComplete: { onMoveTask(task.id, status == .done ? .upcoming : .done) },
+                                onDelete: { onDeleteTask(task.id) },
+                                onDropAt: { location in onCardDrop(task.id, location) },
+                                onDragLiftedChange: { lifted in onCardLiftedChange(lifted) }
+                            ) {
+                                KanbanCard(task: task)
+                            }
+                            .contextMenu {
+                                Button {
+                                    onTapTask(task.id)
+                                } label: {
+                                    Label("Edit", systemImage: "pencil")
+                                }
+                                Divider()
+                                ForEach(TaskBoardStatus.allCases) { other in
+                                    if other != status {
+                                        Button {
+                                            onMoveTask(task.id, other)
+                                        } label: {
+                                            Label("Move to \(other.title)", systemImage: other.sfSymbol)
                                         }
                                     }
-                                    Divider()
-                                    Button(role: .destructive) {
-                                        onDeleteTask(task.id)
-                                    } label: {
-                                        Label("Delete", systemImage: "trash")
-                                    }
                                 }
-                                .transition(.asymmetric(
-                                    insertion: .scale(scale: 0.96).combined(with: .opacity),
-                                    removal: .opacity
-                                ))
+                                Divider()
+                                Button(role: .destructive) {
+                                    onDeleteTask(task.id)
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                            }
+                            .transition(.asymmetric(
+                                insertion: .scale(scale: 0.96).combined(with: .opacity),
+                                removal: .opacity
+                            ))
                         }
                     }
                 }
@@ -357,6 +374,11 @@ private struct KanbanColumn: View {
                 .padding(.vertical, 10)
                 .frame(maxWidth: .infinity, alignment: .top)
             }
+            // Lets a card that's been lifted (drag mode) extend beyond the
+            // column's bounds — without this the floating card is clipped
+            // to the ScrollView and disappears the moment the user drags it
+            // sideways toward another column.
+            .scrollClipDisabled()
         }
         .frame(maxHeight: .infinity, alignment: .top)
         .background(
@@ -365,16 +387,19 @@ private struct KanbanColumn: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(
-                    isTargeted ? status.accentColor.opacity(0.7) : AppColors.border.opacity(0.5),
-                    lineWidth: isTargeted ? 2 : 1
-                )
+                .stroke(AppColors.border.opacity(0.5), lineWidth: 1)
         )
-        .animation(.easeInOut(duration: 0.18), value: isTargeted)
-        .dropDestination(for: DraggedTask.self) { items, _ in
-            for item in items { onDrop(item.taskID) }
-            return !items.isEmpty
-        } isTargeted: { isTargeted = $0 }
+        // Publish this column's frame in board coordinates so the parent
+        // can hit-test card drops.
+        .background(
+            GeometryReader { proxy in
+                Color.clear
+                    .preference(
+                        key: KanbanColumnFramesKey.self,
+                        value: [status: proxy.frame(in: .named("kanbanBoard"))]
+                    )
+            }
+        )
     }
 
     private var header: some View {

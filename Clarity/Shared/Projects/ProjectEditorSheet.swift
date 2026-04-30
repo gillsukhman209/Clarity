@@ -52,7 +52,9 @@ struct ProjectEditorSheet: View {
                         )
                 )
         }
+        #if os(macOS)
         .frame(minWidth: 460, idealWidth: 500, minHeight: 540)
+        #endif
         .background(AppColors.background)
         .onAppear {
             if let editing {

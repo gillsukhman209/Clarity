@@ -2,7 +2,8 @@
 //  RootTabView.swift
 //  Clarity
 //
-//  iOS root tab bar. Today + Calendar + Settings.
+//  iOS root tab bar. Today + Calendar + Pomodoro + Projects.
+//  No Settings tab — appearance toggle lives on the Today top bar instead.
 //
 
 #if os(iOS)
@@ -13,7 +14,7 @@ struct RootTabView: View {
     @State private var selectedTab: Tab = .today
     @State private var currentDate: Date = Calendar.current.startOfDay(for: Date())
 
-    private enum Tab: Hashable { case today, calendar, pomodoro, projects, settings }
+    private enum Tab: Hashable { case today, calendar, pomodoro, projects }
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -45,12 +46,6 @@ struct RootTabView: View {
                 .tag(Tab.projects)
                 .tabItem {
                     Label("Projects", systemImage: "square.stack.3d.up")
-                }
-
-            SettingsView()
-                .tag(Tab.settings)
-                .tabItem {
-                    Label("Settings", systemImage: "gearshape")
                 }
         }
         .tint(AppColors.accent)
