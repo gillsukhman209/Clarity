@@ -73,18 +73,13 @@ final class TaskStore {
     // MARK: - Date-filtered views
 
     /// Tasks scheduled on the same calendar day as `date`.
-    /// Order: timed tasks first by `startTime`; Anytime tasks last by
-    /// `manualOrder` (set by drag-reorder), with `id` as a stable tiebreaker.
+    /// Order: incomplete first, then timed tasks by `startTime`; Anytime tasks
+    /// last by `manualOrder`, with `id` as a stable tiebreaker.
     func tasks(on date: Date) -> [PlanTask] {
         let cal = Calendar.current
         return tasks
             .filter { cal.isDate($0.startTime, inSameDayAs: date) }
-            .sorted { a, b in
-                if a.hasTime != b.hasTime { return a.hasTime }   // timed before timeless
-                if a.hasTime { return a.startTime < b.startTime }
-                if a.manualOrder != b.manualOrder { return a.manualOrder < b.manualOrder }
-                return a.id.uuidString < b.id.uuidString
-            }
+            .sorted(by: taskDisplayOrder)
     }
 
     /// Incomplete free-floating tasks dated in the past, capped at 14 days back.
@@ -180,6 +175,26 @@ final class TaskStore {
     /// on the same day it's already on.
     func move(_ taskID: UUID, to newDate: Date) {
         guard let record = fetchRecord(taskID) else { return }
+        guard moveRecord(record, to: newDate) else { return }
+        save()
+        refresh()
+    }
+
+    /// Moves several tasks to today in one save. Used by the carryover bulk
+    /// action so yesterday's leftovers can be promoted without row-by-row taps.
+    func moveAllToToday(_ taskIDs: [UUID], asOf date: Date = Date()) {
+        var changed = false
+        for id in taskIDs {
+            guard let record = fetchRecord(id) else { continue }
+            changed = moveRecord(record, to: date) || changed
+        }
+        guard changed else { return }
+        save()
+        refresh()
+    }
+
+    @discardableResult
+    private func moveRecord(_ record: TaskRecord, to newDate: Date) -> Bool {
         let cal = Calendar.current
         let timeComps = cal.dateComponents([.hour, .minute, .second], from: record.startTime)
         var components = cal.dateComponents([.year, .month, .day], from: newDate)
@@ -188,10 +203,9 @@ final class TaskStore {
         components.second = timeComps.second
         guard let updated = cal.date(from: components),
               !cal.isDate(updated, inSameDayAs: record.startTime)
-        else { return }
+        else { return false }
         record.startTime = updated
-        save()
-        refresh()
+        return true
     }
 
     /// Wipes every task on this device. With CloudKit on, the deletion
@@ -393,6 +407,7 @@ final class TaskStore {
         }
         for (status, list) in buckets {
             buckets[status] = list.sorted { a, b in
+                if a.isCompleted != b.isCompleted { return !a.isCompleted }
                 if a.hasTime != b.hasTime { return a.hasTime }
                 return a.startTime < b.startTime
             }
@@ -492,5 +507,13 @@ final class TaskStore {
             predicate: #Predicate<ProjectRecord> { $0.id == target }
         )
         return try? context.fetch(descriptor).first
+    }
+
+    private func taskDisplayOrder(_ a: PlanTask, _ b: PlanTask) -> Bool {
+        if a.isCompleted != b.isCompleted { return !a.isCompleted }
+        if a.hasTime != b.hasTime { return a.hasTime }
+        if a.hasTime { return a.startTime < b.startTime }
+        if a.manualOrder != b.manualOrder { return a.manualOrder < b.manualOrder }
+        return a.id.uuidString < b.id.uuidString
     }
 }

@@ -278,21 +278,14 @@ struct ProjectDetailView: View {
     private func submitQuick() {
         let trimmed = quickText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        let parsed = SmartTaskParser.parse(trimmed)
-        let hasTime = SmartTaskParser.hasExplicitTime(in: trimmed)
-        let anchor = parsed.startTime ?? Calendar.current.startOfDay(for: Date())
-        let task = PlanTask(
-            title: parsed.title,
-            category: parsed.category,
+        let tasks = SmartTaskParser.makeTasks(
+            from: trimmed,
             priority: .medium,
-            startTime: anchor,
-            hasTime: hasTime,
-            durationMinutes: parsed.durationMinutes,
             projectID: projectID,
             boardStatus: addTargetStatus
         )
         withAnimation(.spring(response: 0.34, dampingFraction: 0.82)) {
-            store.append([task])
+            store.append(tasks)
         }
         quickText = ""
         addTargetStatus = .upcoming

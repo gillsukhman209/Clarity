@@ -22,6 +22,9 @@ final class NotificationsManager {
     }
 
     private(set) var authorization: Authorization = .unknown
+    private let taskIdentifierPrefix = "clarity.task."
+    private let maxPendingTaskNotifications = 60
+    @ObservationIgnored private var syncGeneration: Int = 0
 
     /// Asks the system for permission. Idempotent — safe to call repeatedly.
     func requestAuthorization() async {
@@ -57,15 +60,37 @@ final class NotificationsManager {
     /// - low    → fires 5 min before start
     /// Timeless tasks (`!hasTime`) get no notification — there's nothing to ping at.
     func sync(with tasks: [PlanTask]) {
-        let center = UNUserNotificationCenter.current()
-        center.removeAllPendingNotificationRequests()
-        guard authorization == .authorized else { return }
+        let canSchedule = authorization == .authorized
+        let snapshot = tasks
+        syncGeneration += 1
+        let generation = syncGeneration
 
+        Task { @MainActor [weak self] in
+            guard let self, generation == self.syncGeneration else { return }
+            let center = UNUserNotificationCenter.current()
+            let pending = await center.pendingNotificationRequests()
+            let managedIDs = pending
+                .map(\.identifier)
+                .filter { identifier in
+                    identifier.hasPrefix(self.taskIdentifierPrefix) || UUID(uuidString: identifier) != nil
+                }
+            if !managedIDs.isEmpty {
+                center.removePendingNotificationRequests(withIdentifiers: managedIDs)
+            }
+            guard canSchedule else { return }
+            for request in self.pendingRequests(for: snapshot) {
+                try? await center.add(request)
+            }
+        }
+    }
+
+    private func pendingRequests(for tasks: [PlanTask]) -> [UNNotificationRequest] {
         let now = Date()
-        for task in tasks where !task.isCompleted && task.hasTime {
+        return tasks.compactMap { task -> (Date, UNNotificationRequest)? in
+            guard !task.isCompleted && task.hasTime else { return nil }
             let lead = leadMinutes(for: task.priority)
             let fireDate = task.startTime.addingTimeInterval(-Double(lead) * 60)
-            guard fireDate > now else { continue }
+            guard fireDate > now else { return nil }
 
             let content = UNMutableNotificationContent()
             content.title = task.title
@@ -78,12 +103,19 @@ final class NotificationsManager {
             )
             let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)
             let request = UNNotificationRequest(
-                identifier: task.id.uuidString,
+                identifier: taskIdentifier(for: task),
                 content: content,
                 trigger: trigger
             )
-            center.add(request)
+            return (fireDate, request)
         }
+        .sorted { $0.0 < $1.0 }
+        .prefix(maxPendingTaskNotifications)
+        .map(\.1)
+    }
+
+    private func taskIdentifier(for task: PlanTask) -> String {
+        taskIdentifierPrefix + task.id.uuidString
     }
 
     private func leadMinutes(for priority: TaskPriority) -> Int {

@@ -14,6 +14,7 @@ struct CarryoverSection: View {
     let tasks: [PlanTask]
     var onTapTask: (UUID) -> Void
     var onMoveToToday: (UUID) -> Void
+    var onMoveAllToToday: () -> Void
     var onComplete: (UUID) -> Void
     var onDelete: (UUID) -> Void
 
@@ -55,33 +56,57 @@ struct CarryoverSection: View {
     // MARK: - Header
 
     private var header: some View {
-        Button {
-            withAnimation(.easeInOut(duration: 0.22)) { expanded.toggle() }
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "clock.arrow.circlepath")
-                    .font(.system(size: 12, weight: .bold))
+        HStack(spacing: 8) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.22)) { expanded.toggle() }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "clock.arrow.circlepath")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(AppColors.Priority.mediumInk)
+                    Text(headerTitle)
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .foregroundStyle(AppColors.textPrimary)
+                    Text("\(tasks.count)")
+                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .foregroundStyle(AppColors.Priority.mediumInk)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(AppColors.Priority.mediumInk.opacity(0.15)))
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(expanded ? "Hide carried-over tasks" : "Show carried-over tasks")
+
+            Spacer(minLength: AppSpacing.sm)
+
+            Button {
+                onMoveAllToToday()
+            } label: {
+                Label("Move all", systemImage: "arrow.turn.down.right")
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
                     .foregroundStyle(AppColors.Priority.mediumInk)
-                Text(headerTitle)
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
-                    .foregroundStyle(AppColors.textPrimary)
-                Text("\(tasks.count)")
-                    .font(.system(size: 11, weight: .semibold, design: .rounded))
-                    .foregroundStyle(AppColors.Priority.mediumInk)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 2)
-                    .background(Capsule().fill(AppColors.Priority.mediumInk.opacity(0.15)))
-                Spacer()
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Capsule().fill(AppColors.Priority.mediumInk.opacity(0.12)))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Move all carried-over tasks to today")
+
+            Button {
+                withAnimation(.easeInOut(duration: 0.22)) { expanded.toggle() }
+            } label: {
                 Image(systemName: expanded ? "chevron.up" : "chevron.down")
                     .font(.system(size: 11, weight: .bold))
                     .foregroundStyle(AppColors.textSecondary)
+                    .frame(width: 24, height: 24)
             }
-            .contentShape(Rectangle())
-            .padding(.horizontal, 4)
-            .padding(.vertical, 4)
+            .buttonStyle(.plain)
+            .accessibilityHidden(true)
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(expanded ? "Hide carried-over tasks" : "Show carried-over tasks")
+        .padding(.horizontal, 4)
+        .padding(.vertical, 4)
     }
 
     private var headerTitle: String {

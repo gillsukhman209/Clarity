@@ -355,7 +355,8 @@ struct QuickAddView: View {
 
         errorMessage = nil
 
-        if useAI {
+        let smartPreview = SmartTaskParser.parse(trimmed)
+        if useAI && smartPreview.recurrence == nil {
             await submitViaAI(trimmed)
         } else {
             submitViaSmart(trimmed)
@@ -363,18 +364,11 @@ struct QuickAddView: View {
     }
 
     private func submitViaSmart(_ input: String) {
-        let parsed = SmartTaskParser.parse(input)
-        let hasTime = SmartTaskParser.hasExplicitTime(in: input)
-        let anchor = parsed.startTime ?? Calendar.current.startOfDay(for: Date())
-        let task = PlanTask(
-            title: parsed.title,
-            category: parsed.category,
-            priority: selectedPriority ?? .medium,
-            startTime: anchor,
-            hasTime: hasTime,
-            durationMinutes: parsed.durationMinutes
+        let tasks = SmartTaskParser.makeTasks(
+            from: input,
+            priority: selectedPriority ?? .medium
         )
-        store.append([task])
+        store.append(tasks)
         dismiss()
     }
 

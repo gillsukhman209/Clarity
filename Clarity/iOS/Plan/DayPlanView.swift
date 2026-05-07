@@ -65,6 +65,11 @@ struct DayPlanView: View {
                         store.move(id, to: Date())
                     }
                 },
+                onMoveAllToToday: {
+                    withAnimation(.spring(response: 0.34, dampingFraction: 0.82)) {
+                        store.moveAllToToday(carryoverItems.map(\.id), asOf: Date())
+                    }
+                },
                 onComplete: { id in
                     withAnimation(.easeInOut(duration: 0.2)) {
                         store.toggleComplete(id)
