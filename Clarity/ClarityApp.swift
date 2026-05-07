@@ -20,37 +20,16 @@ struct ClarityApp: App {
             ContentView()
                 .background(AppColors.background.ignoresSafeArea())
         }
-        .modelContainer(Self.makeContainer())
+        .modelContainer(Self.appContainer())
         #if os(macOS)
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1280, height: 820)
         #endif
     }
 
-    /// Builds a SwiftData container with CloudKit sync enabled.
-    /// If the cloud config fails (no signed-in iCloud, sandbox issue, schema
-    /// problem) we log the reason and fall back to local-only storage so the
-    /// app still launches.
-    private static func makeContainer() -> ModelContainer {
-        let schema = Schema([TaskRecord.self, SubtaskRecord.self, ProjectRecord.self, FocusSessionRecord.self])
-
-        let cloudConfig = ModelConfiguration(
-            schema: schema,
-            isStoredInMemoryOnly: false,
-            cloudKitDatabase: .private("iCloud.com.gill.Clarity")
-        )
-        do {
-            let container = try ModelContainer(for: schema, configurations: [cloudConfig])
-            print("✓ SwiftData + CloudKit container ready (iCloud.com.gill.Clarity)")
+    private static func appContainer() -> ModelContainer {
+        if let container = try? ClarityPersistence.makeContainer() {
             return container
-        } catch {
-            print("⚠️ CloudKit container failed: \(error)")
-            print("   Falling back to local-only storage. Sync is OFF.")
-        }
-
-        let localConfig = ModelConfiguration(schema: schema, cloudKitDatabase: .none)
-        if let local = try? ModelContainer(for: schema, configurations: [localConfig]) {
-            return local
         }
         fatalError("Could not initialize Clarity's data store.")
     }

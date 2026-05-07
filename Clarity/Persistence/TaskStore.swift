@@ -41,6 +41,19 @@ final class TaskStore {
         refresh()
     }
 
+    @discardableResult
+    func importPendingSiriCaptures() -> Int {
+        let pending = SiriTaskCaptureInbox.drainPendingTasks()
+        guard !pending.isEmpty else { return 0 }
+
+        let existingIDs = Set(tasks.map(\.id))
+        let newTasks = pending.filter { !existingIDs.contains($0.id) }
+        guard !newTasks.isEmpty else { return 0 }
+
+        append(newTasks)
+        return newTasks.count
+    }
+
     /// Listens for `NSPersistentStoreRemoteChange`, which the
     /// NSPersistentCloudKitContainer underneath SwiftData fires whenever
     /// CloudKit pushes records from another device.

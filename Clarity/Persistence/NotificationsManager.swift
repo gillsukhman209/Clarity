@@ -51,6 +51,23 @@ final class NotificationsManager {
         }
     }
 
+    /// Reads the current notification permission without presenting a system
+    /// prompt. Use this from background capture surfaces like Siri.
+    func refreshAuthorizationStatus() async {
+        let center = UNUserNotificationCenter.current()
+        let current = await center.notificationSettings()
+        switch current.authorizationStatus {
+        case .authorized, .provisional, .ephemeral:
+            authorization = .authorized
+        case .denied:
+            authorization = .denied
+        case .notDetermined:
+            authorization = .unknown
+        @unknown default:
+            authorization = .unknown
+        }
+    }
+
     /// Cancels all currently scheduled task notifications and reschedules from
     /// the given plan. Cheap enough to call after every store change.
     ///

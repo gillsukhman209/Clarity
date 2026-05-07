@@ -14,6 +14,7 @@ import Foundation
 import UserNotifications
 
 #if canImport(UIKit)
+import Intents
 import UIKit
 
 final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
@@ -23,7 +24,15 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     ) -> Bool {
         application.registerForRemoteNotifications()
         UNUserNotificationCenter.current().delegate = self
+        requestSiriAuthorizationIfNeeded()
         return true
+    }
+
+    private func requestSiriAuthorizationIfNeeded() {
+        guard INPreferences.siriAuthorizationStatus() == .notDetermined else { return }
+        INPreferences.requestSiriAuthorization { status in
+            print("Siri authorization status: \(status.rawValue)")
+        }
     }
 
     func application(

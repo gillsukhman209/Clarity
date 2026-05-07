@@ -55,6 +55,7 @@ struct ContentView: View {
         .task {
             if store == nil {
                 let s = TaskStore(context: context, notifications: notifications)
+                s.importPendingSiriCaptures()
                 store = s
                 // Wire FocusEngine ↔ store: seed today's persisted sessions
                 // into the engine, persist any new sessions back, and let
@@ -74,6 +75,7 @@ struct ContentView: View {
         }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
+                store?.importPendingSiriCaptures()
                 store?.reload()
                 // Re-seed today's focus sessions on foreground in case the
                 // app was backgrounded across a day boundary or another

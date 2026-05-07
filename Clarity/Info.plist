@@ -2,6 +2,31 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>CFBundleSpokenName</key>
+	<string>Clarity</string>
+	<key>INAlternativeAppNames</key>
+	<array>
+		<dict>
+			<key>INAlternativeAppName</key>
+			<string>Clarity Tasks</string>
+			<key>INAlternativeAppNamePronunciationHint</key>
+			<string>clarity tasks</string>
+		</dict>
+		<dict>
+			<key>INAlternativeAppName</key>
+			<string>Clarity To Do</string>
+			<key>INAlternativeAppNamePronunciationHint</key>
+			<string>clarity to do</string>
+		</dict>
+		<dict>
+			<key>INAlternativeAppName</key>
+			<string>Clarity Planner</string>
+			<key>INAlternativeAppNamePronunciationHint</key>
+			<string>clarity planner</string>
+		</dict>
+	</array>
+	<key>NSSiriUsageDescription</key>
+	<string>Clarity uses Siri to add tasks you dictate into your task list.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>
